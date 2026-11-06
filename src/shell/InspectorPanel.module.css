@@ -1,0 +1,141 @@
+.inspector {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.placeholder {
+    margin: 8px 12px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.tabs {
+    flex: none;
+    display: flex;
+    gap: 2px;
+    height: 30px;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.tab {
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.tab[aria-selected="true"] {
+    box-shadow: inset 0 -2px 0 var(--color-text);
+    color: var(--color-text);
+}
+
+.cell {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px;
+}
+
+.cellHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.name {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+.type {
+    color: var(--color-text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-2xs);
+    font-weight: 400;
+}
+
+.spacer {
+    flex: 1;
+}
+
+.text,
+.hex {
+    margin: 0;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
+.hex {
+    white-space: pre;
+    overflow-x: auto;
+    font-size: var(--font-size-2xs);
+}
+
+.image {
+    max-width: 100%;
+    max-height: 240px;
+    align-self: flex-start;
+    border: 1px solid var(--color-border);
+    background: repeating-conic-gradient(var(--color-hover) 0 25%, transparent 0 50%) 0 0 / 12px 12px;
+}
+
+.meta {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.null {
+    color: var(--color-text-faint);
+    font-family: var(--font-mono);
+    font-style: italic;
+}
+
+.array {
+    margin: 0;
+    padding-left: 28px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    line-height: 1.6;
+}
+
+.rowList {
+    margin: 0;
+    padding: 4px 0;
+}
+
+.rowItem {
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.rowItem dt {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.rowItem dd {
+    margin: 2px 0 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
+.rowItem dd[data-kind="null"],
+.rowItem dd[data-kind="binary"] {
+    color: var(--color-text-faint);
+    font-style: italic;
+}

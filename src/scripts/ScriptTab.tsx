@@ -13,17 +13,20 @@ import {
     replaceText,
     resultsBetween,
     setAutocomplete,
+    setCompletionSchema,
     setDialect,
     showResult,
     statementsToRun,
 } from "@/editor/sqlEditor";
 import { useConnectFlow } from "@/hooks/useConnectFlow";
 import type { ConnectionsState } from "@/hooks/useConnections";
+import { activeConnection } from "@/lib/activeConnection";
 import { backend, errorMessage, RunFailure, type Settings } from "@/lib/backend";
 import type { SessionInfo, TransactionMode, TransactionStatement } from "@/lib/bindings";
 import { ACCESS_LABELS, plural } from "@/lib/connectionFormat";
 import { folderPath } from "@/lib/connectionTree";
 import { log } from "@/lib/log";
+import { completionTables, useSchema } from "@/lib/schemaStore";
 import { type Dialect, fillPlaceholders, placeholderKeys, type Statement } from "@/lib/sql/statements";
 import { ParamsDialog } from "@/scripts/ParamsDialog";
 import { ResultBlock } from "@/scripts/ResultBlock";
@@ -46,6 +49,7 @@ import controls from "@/ui/controls.module.css";
 
 /** What the tab strip needs to know to close a tab safely; refreshed as the tab changes. */
 export interface TabRuntime {
+    connectionId: string | null;
     sessionId: string | null;
     inTransaction: boolean;
     flush: () => Promise<void>;
@@ -496,18 +500,57 @@ export function ScriptTab({ path, active, connections, settings, onEdited, onRun
         if (active) viewRef.current?.focus();
     }, [active]);
 
+    useEffect(() => {
+        if (active && connectionId) activeConnection.set(connectionId);
+    }, [active, connectionId]);
+
+    // Autocomplete schemas, tables and columns from the schema cache; reloaded when it changes.
+    const schemaVersion = useSchema(connectionId)?.version ?? 0;
+    // biome-ignore lint/correctness/useExhaustiveDependencies: a schema reload or the editor appearing (after loading) applies it again
+    useEffect(() => {
+        const view = viewRef.current;
+        if (!view || !connectionId) {
+            if (view) setCompletionSchema(view, undefined);
+            return;
+        }
+        let cancelled = false;
+        void completionTables(connectionId).then((tables) => {
+            if (cancelled || !viewRef.current) return;
+            const namespace: Record<string, Record<string, string[]>> = {};
+            for (const t of tables) {
+                const tablesOfSchema = namespace[t.schema] ?? {};
+                tablesOfSchema[t.table] = t.columns;
+                namespace[t.schema] = tablesOfSchema;
+            }
+            const defaultSchema = dialect === "sqlite" ? "main" : schema.trim() || "public";
+            setCompletionSchema(viewRef.current, { namespace, defaultSchema });
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [connectionId, dialect, schema, schemaVersion, loadError]);
+
+    // A disconnect from the Connections view closes this tab's session too.
+    useEffect(() => {
+        if (session && !connections.sessions.some((s) => s.id === session.id)) {
+            setSession(null);
+            setTxOpen(false);
+        }
+    }, [connections.sessions, session]);
+
     // Report what closing this tab involves.
     const sessionId = session?.id ?? null;
     const runtimeRef = useRef({ save, reloadFromDisk });
     runtimeRef.current = { save, reloadFromDisk };
     useEffect(() => {
         onRuntime({
+            connectionId,
             sessionId,
             inTransaction: txOpen,
             flush: () => runtimeRef.current.save(),
             reloadFromDisk: () => runtimeRef.current.reloadFromDisk(),
         });
-    }, [sessionId, txOpen, onRuntime]);
+    }, [connectionId, sessionId, txOpen, onRuntime]);
 
     // Leaving the tab closes its session (the tab strip has already asked about open transactions).
     const sessionRef = useRef(session);

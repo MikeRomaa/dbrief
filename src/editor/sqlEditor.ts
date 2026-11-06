@@ -1,6 +1,6 @@
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { PostgreSQL, SQLite, sql } from "@codemirror/lang-sql";
+import { PostgreSQL, SQLite, type SQLNamespace, sql } from "@codemirror/lang-sql";
 import { bracketMatching, HighlightStyle, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import {
@@ -216,8 +216,34 @@ const theme = EditorView.theme({
 const language = new Compartment();
 const completion = new Compartment();
 
-function languageFor(dialect: Dialect): Extension {
-    return [dialectFacet.of(dialect), sql({ dialect: dialect === "sqlite" ? SQLite : PostgreSQL })];
+/** Tables and columns autocomplete offers, from the schema cache: schema → table → columns. */
+export interface CompletionSchema {
+    namespace: SQLNamespace;
+    defaultSchema?: string;
+}
+
+interface LanguageConfig {
+    dialect: Dialect;
+    schema?: CompletionSchema;
+}
+
+const configs = new WeakMap<EditorView, LanguageConfig>();
+
+function languageFor({ dialect, schema }: LanguageConfig): Extension {
+    return [
+        dialectFacet.of(dialect),
+        sql({
+            dialect: dialect === "sqlite" ? SQLite : PostgreSQL,
+            schema: schema?.namespace,
+            defaultSchema: schema?.defaultSchema,
+        }),
+    ];
+}
+
+function reconfigure(view: EditorView, change: Partial<LanguageConfig>) {
+    const config = { ...(configs.get(view) ?? { dialect: "postgres" as Dialect }), ...change };
+    configs.set(view, config);
+    view.dispatch({ effects: language.reconfigure(languageFor(config)) });
 }
 
 /** A SQL editor in `parent`. Callbacks are read through the getter, so the host can update them. */
@@ -263,7 +289,7 @@ export function createSqlEditor(
         },
     ]);
 
-    return new EditorView({
+    const view = new EditorView({
         parent,
         state: EditorState.create({
             doc: text,
@@ -278,7 +304,7 @@ export function createSqlEditor(
                 bracketMatching(),
                 closeBrackets(),
                 highlightSelectionMatches(),
-                language.of(languageFor(dialect)),
+                language.of(languageFor({ dialect })),
                 completion.of(autocomplete ? autocompletion() : []),
                 syntaxHighlighting(highlight),
                 statementsField,
@@ -301,10 +327,17 @@ export function createSqlEditor(
             ],
         }),
     });
+    configs.set(view, { dialect });
+    return view;
 }
 
 export function setDialect(view: EditorView, dialect: Dialect) {
-    view.dispatch({ effects: language.reconfigure(languageFor(dialect)) });
+    reconfigure(view, { dialect });
+}
+
+/** Sets the schemas, tables and columns autocomplete suggests (`undefined` for none). */
+export function setCompletionSchema(view: EditorView, schema: CompletionSchema | undefined) {
+    reconfigure(view, { schema });
 }
 
 export function setAutocomplete(view: EditorView, on: boolean) {
@@ -350,4 +383,25 @@ export function replaceText(view: EditorView, text: string, selectionOnly = fals
     const { from, to } = view.state.selection.main;
     const range = selectionOnly && from !== to ? { from, to } : { from: 0, to: view.state.doc.length };
     view.dispatch({ changes: { ...range, insert: text } });
+}
+
+/** A read-only SQL view (the table tab's DDL), with the editor's highlighting and line numbers. */
+export function createSqlViewer(parent: HTMLElement, text: string, dialect: Dialect): EditorView {
+    return new EditorView({
+        parent,
+        state: EditorState.create({
+            doc: text,
+            extensions: [
+                lineNumbers(),
+                highlightSpecialChars(),
+                drawSelection(),
+                languageFor({ dialect }),
+                syntaxHighlighting(highlight),
+                theme,
+                EditorState.readOnly.of(true),
+                EditorView.editable.of(false),
+                keymap.of(defaultKeymap),
+            ],
+        }),
+    });
 }

@@ -27,6 +27,8 @@ Only the **next** milestone gets a detailed plan (`plans/3-…`, `plans/4-…`, 
 - Opening SQLite files by drag-drop and "Open with" (file associations, single instance) moved from milestone 2 to milestone 9 with packaging. The backend part (`open_sqlite_file`) was built in milestone 2.
 - The statement classifier (read / write / DDL per access level) moved from milestone 2 to milestone 3, where running SQL first needs it. Idea so far: `sqlparser` with the PostgreSQL and SQLite dialects; unparseable SQL counts as DDL.
 - The active connection in the status bar (name, access level, server version) and the color tag tint of the top and status bars, with its Appearance setting ("Highlight production" in the mockup), moved from milestone 2 to milestone 4, where the table view first gives a clear active connection.
+- The grid toolbar's transaction mode and the Data grid date format setting moved from milestone 4 to milestone 5. The grid only reads until editing arrives, and dates show as the database's text until the date editors exist.
+- Milestone 5 also switches inline and popped-out script results to the data grid component from milestone 4, giving them column resize, range copy and the inspector.
 - Settings sections are added in the milestone that introduces each feature; milestone 9 covers anything left.
 
 ## Status
@@ -35,8 +37,8 @@ Only the **next** milestone gets a detailed plan (`plans/3-…`, `plans/4-…`, 
 | --- | -------------------------- | -------------------- | ------- |
 | 1   | Foundation                 | `3-foundation.md`    | Built   |
 | 2   | Connections + first launch | `4-connections.md`   | Built   |
-| 3   | Script editor              | `5-script-editor.md` | Planned |
-| 4   | Explorer + table browse    | not written          |         |
+| 3   | Script editor              | `5-script-editor.md` | Built   |
+| 4   | Explorer + table browse    | `6-explorer.md`      | Built   |
 | 5   | Grid editing               | not written          |         |
 | 6   | History                    | not written          |         |
 | 7   | Diagrams                   | not written          |         |

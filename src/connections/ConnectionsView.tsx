@@ -26,6 +26,7 @@ import { FolderNameDialog, RemoveDialog } from "@/connections/dialogs";
 import { PinnedCards } from "@/connections/PinnedCards";
 import { useConnectFlow } from "@/hooks/useConnectFlow";
 import type { ConnectionsState } from "@/hooks/useConnections";
+import { activeConnection } from "@/lib/activeConnection";
 import { backend, type Credentials } from "@/lib/backend";
 import {
     allFolderIds,
@@ -37,6 +38,7 @@ import {
     type SortOrder,
     visibleRows,
 } from "@/lib/connectionTree";
+import { confirmDisconnect } from "@/lib/disconnect";
 import { EngineIcon } from "@/ui/EngineIcon";
 import { MenuButton, type MenuEntry } from "@/ui/Menu";
 
@@ -60,7 +62,10 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
     const [connecting, setConnecting] = useState<string | null>(null);
 
     const rows = useMemo(() => visibleRows(tree, { collapsed, filter, sort }), [tree, collapsed, filter, sort]);
-    const connected = useMemo(() => new Set(sessions.map((s) => s.connection_id)), [sessions]);
+    const connected = useMemo(
+        () => new Set(sessions.filter((s) => s.background).map((s) => s.connection_id)),
+        [sessions],
+    );
     const canReorder = sort === "manual" && filter.trim() === "";
     const hasAnything = index.connections.size > 0 || index.folders.size > 0;
     const allCollapsed = index.folders.size > 0 && allFolderIds(index).every((id) => collapsed.has(id));
@@ -79,7 +84,8 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
     const connect = async (connection: Connection, prompted: Credentials = {}) => {
         setConnecting(connection.id);
         try {
-            await connectFlow.connect(connection, prompted);
+            // The most recently connected connection becomes the active one (status bar, Explorer).
+            if (await connectFlow.connect(connection, prompted, "background")) activeConnection.set(connection.id);
         } finally {
             setConnecting(null);
             await state.reload();
@@ -88,9 +94,9 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
 
     const disconnect = (connectionId: string) =>
         run(async () => {
-            for (const s of sessions.filter((s) => s.connection_id === connectionId)) {
-                await backend.disconnect(s.id);
-            }
+            // Tabs with an open transaction on this connection ask to commit or roll back first.
+            if (!(await confirmDisconnect(connectionId))) return;
+            await backend.disconnectConnection(connectionId);
         });
 
     const duplicate = (id: string) =>

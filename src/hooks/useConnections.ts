@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { backend, errorMessage } from "@/lib/backend";
 import type { SessionInfo } from "@/lib/bindings";
+import { events } from "@/lib/bindings";
 import { type ConnectionTree, indexTree, type SortOrder, type TreeIndex } from "@/lib/connectionTree";
 
 /** `ui_state` keys for the view's preferences. */
@@ -44,6 +45,17 @@ export function useConnections(): ConnectionsState {
         const [nextTree, nextSessions] = await Promise.all([backend.connectionTree(), backend.listSessions()]);
         setTree(nextTree);
         setSessions(nextSessions);
+    }, []);
+
+    // Sessions open and close from tabs, the Explorer and search too.
+    useEffect(() => {
+        const unlisten = events.sessionsChanged.listen(() => {
+            backend
+                .listSessions()
+                .then(setSessions)
+                .catch(() => {});
+        });
+        return () => void unlisten.then((off) => off());
     }, []);
 
     useEffect(() => {

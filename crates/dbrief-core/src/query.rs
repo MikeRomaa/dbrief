@@ -22,6 +22,60 @@ pub struct Column {
 /// One row as display text; `None` is SQL NULL.
 pub type Row = Vec<Option<String>>;
 
+/// A value read by the app's own queries (schema loading, table pages): text, or the raw bytes of a
+/// binary value (PostgreSQL `bytea`, SQLite BLOB).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Value {
+    Null,
+    Text(String),
+    Bytes(Vec<u8>),
+}
+
+impl Value {
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            Self::Text(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// The value as an owned string; bytes as lowercase hex.
+    pub fn into_text(self) -> Option<String> {
+        match self {
+            Self::Null => None,
+            Self::Text(t) => Some(t),
+            Self::Bytes(b) => Some(b.iter().map(|b| format!("{b:02x}")).collect()),
+        }
+    }
+
+    pub fn as_i64(&self) -> Option<i64> {
+        self.as_text()?.trim().parse().ok()
+    }
+
+    pub fn as_f64(&self) -> Option<f64> {
+        self.as_text()?.trim().parse().ok()
+    }
+
+    /// PostgreSQL `t`/`f` and SQLite `1`/`0`.
+    pub fn as_bool(&self) -> bool {
+        matches!(self.as_text(), Some("t" | "true" | "1"))
+    }
+}
+
+/// Columns and all rows of a query the app ran itself.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Values {
+    pub columns: Vec<Column>,
+    pub rows: Vec<Vec<Value>>,
+}
+
+impl Values {
+    /// The index of a column by name.
+    pub fn column(&self, name: &str) -> Option<usize> {
+        self.columns.iter().position(|c| c.name == name)
+    }
+}
+
 /// An error from the database, with PostgreSQL's code, detail, hint and position (1-based character
 /// offset into the statement) when it gives them.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{AssertSqlSafe, SqlSafeStr as _};
 
 use crate::connections::{ConnectionInput, Engine, SslMode};
-use crate::query::{CancelToken, Column, ResultSink, RunEnd};
+use crate::query::{CancelToken, Column, ResultSink, RunEnd, Values};
 use crate::ssh::Endpoint;
 
 /// Opens connections with fixed settings. Kept by a session so it can reconnect the same way.
@@ -46,6 +46,10 @@ pub trait EngineConnection: Send {
         page_size: usize,
         sink: &mut dyn ResultSink,
     ) -> Result<RunEnd, sqlx::Error>;
+
+    /// Runs a query the app built (schema loading, table pages) and returns all its rows. Only for
+    /// queries whose size is bounded.
+    async fn fetch_values(&mut self, sql: &str) -> Result<Values, sqlx::Error>;
 
     /// What stops a statement running on this connection.
     fn cancel_token(&self) -> CancelToken;

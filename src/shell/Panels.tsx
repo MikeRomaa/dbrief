@@ -1,10 +1,12 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
+import type { Settings } from "@/lib/backend";
 import type { LayoutState, RailItem } from "@/lib/layout";
 import { handleRovingKeyDown } from "@/lib/roving";
 import { BottomResults } from "@/scripts/BottomResults";
 import { railTabId } from "@/shell/ActivityRail";
+import { InspectorPanel } from "@/shell/InspectorPanel";
 import { LogPanel } from "@/shell/LogPanel";
 import { commandHints, RAIL_COMMANDS, SHELL_COMMANDS, useCommands } from "@/shell/shellCommands";
 
@@ -131,11 +133,11 @@ export function BottomPanel({ layout, height }: { layout: LayoutState; height: n
     );
 }
 
-export function Inspector() {
+export function Inspector({ settings }: { settings: Settings | null }) {
     return (
         <aside id="inspector" aria-label="Inspector" className={styles.inspector}>
             <h2 className={styles.panelHeader}>Inspector</h2>
-            <p className={styles.placeholder}>Select a cell, row or object to see its details.</p>
+            <InspectorPanel settings={settings} />
         </aside>
     );
 }

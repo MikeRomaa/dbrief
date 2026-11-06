@@ -12,7 +12,7 @@ use super::{
     report_described_columns, strip_prefix_ci,
 };
 use crate::connections::{AccessLevel, ConnectionInput, Engine, SslMode};
-use crate::query::{CancelToken, ResultSink, Row, RunEnd, drive};
+use crate::query::{CancelToken, ResultSink, Row, RunEnd, Value, Values, drive};
 use crate::ssh::Endpoint;
 
 /// Reported to the server as `application_name`.
@@ -213,6 +213,23 @@ impl EngineConnection for PostgresConnection {
         Ok(end)
     }
 
+    async fn fetch_values(&mut self, sql: &str) -> Result<Values, sqlx::Error> {
+        let rows = sqlx::raw_sql(AssertSqlSafe(sql.to_owned()))
+            .fetch_all(&mut self.conn)
+            .await?;
+        let columns = match rows.first() {
+            Some(r) => columns_of(r.columns()),
+            // An empty result still has columns; describing the query gives them.
+            None => (&mut self.conn)
+                .describe(super::user_sql(sql))
+                .await
+                .map(|d| columns_of(d.columns()))
+                .unwrap_or_default(),
+        };
+        let rows = rows.iter().map(|row| pg_values(row, &columns)).collect();
+        Ok(Values { columns, rows })
+    }
+
     fn cancel_token(&self) -> CancelToken {
         CancelToken::Postgres { pid: self.pid }
     }
@@ -241,6 +258,42 @@ fn pg_row(row: &PgRow) -> Row {
                 PgValueFormat::Binary => Some(format!("({})", value.type_info().name())),
             }
         })
+        .collect()
+}
+
+/// Values as text, except `bytea`, whose `\x…` hex text is decoded to bytes.
+fn pg_values(row: &PgRow, columns: &[crate::query::Column]) -> Vec<Value> {
+    (0..row.len())
+        .map(|i| {
+            let Ok(value) = row.try_get_raw(i) else {
+                return Value::Null;
+            };
+            if value.is_null() {
+                return Value::Null;
+            }
+            let text = match value.format() {
+                PgValueFormat::Text => value.as_str().unwrap_or_default().to_owned(),
+                PgValueFormat::Binary => format!("({})", value.type_info().name()),
+            };
+            if columns.get(i).is_some_and(|c| c.type_name == "BYTEA")
+                && let Some(bytes) = decode_bytea(&text)
+            {
+                return Value::Bytes(bytes);
+            }
+            Value::Text(text)
+        })
+        .collect()
+}
+
+/// `\x0102…` (PostgreSQL's hex output for `bytea`) as bytes.
+pub(crate) fn decode_bytea(text: &str) -> Option<Vec<u8>> {
+    let hex = text.strip_prefix("\\x")?;
+    if hex.len() % 2 != 0 {
+        return None;
+    }
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok())
         .collect()
 }
 

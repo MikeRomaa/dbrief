@@ -97,7 +97,7 @@ pub(super) struct OpenResult {
 pub struct CancelHandle {
     connector: Arc<dyn Connector>,
     current: Arc<std::sync::Mutex<(Option<CancelToken>, Option<Endpoint>)>>,
-    timed_out: Arc<AtomicBool>,
+    pub(super) timed_out: Arc<AtomicBool>,
 }
 
 impl CancelHandle {
@@ -113,7 +113,7 @@ impl CancelHandle {
         *self.current.lock().unwrap_or_else(|e| e.into_inner()) = (Some(token), endpoint);
     }
 
-    fn reset(&self) {
+    pub(super) fn reset(&self) {
         self.timed_out.store(false, Ordering::SeqCst);
         if let (Some(token), _) = &*self.current.lock().unwrap_or_else(|e| e.into_inner()) {
             token.reset();
@@ -151,7 +151,7 @@ impl CancelHandle {
 }
 
 /// Errors that mean the connection itself is gone, rather than the statement failing.
-fn connection_lost(e: &sqlx::Error) -> bool {
+pub(super) fn connection_lost(e: &sqlx::Error) -> bool {
     matches!(
         e,
         sqlx::Error::Io(_)
@@ -162,7 +162,7 @@ fn connection_lost(e: &sqlx::Error) -> bool {
 }
 
 /// SQLSTATE `query_canceled` (PostgreSQL) and SQLite's `SQLITE_INTERRUPT` message.
-fn canceled(error: &QueryError) -> bool {
+pub(super) fn canceled(error: &QueryError) -> bool {
     error.code.as_deref() == Some("57014") || error.message == "interrupted"
 }
 
@@ -371,7 +371,7 @@ impl Session {
 
     /// Reconnects when the connection was lost, unless a transaction was open: that has to be
     /// acknowledged first (see [`Session::reconnect_after_lost_transaction`]).
-    async fn ensure_connected(&mut self) -> Result<(), SessionError> {
+    pub(super) async fn ensure_connected(&mut self) -> Result<(), SessionError> {
         if self.transaction_lost {
             return Err(SessionError::TransactionLost);
         }

@@ -77,31 +77,81 @@ fn json_value(value: Option<&str>, type_name: &str) -> serde_json::Value {
     serde_json::Value::String(v.to_owned())
 }
 
+/// A `Write` into a shared buffer, so the writer can be read back after it's done.
+struct SharedBuffer(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl Write for SharedBuffer {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 /// A double-quoted SQL identifier.
 fn quote_ident(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
-/// Writes rows to a file in one format. `table` names the target of SQL INSERT statements.
+/// Writes rows to a file, or to memory for the clipboard, in one format. `target` is the quoted table
+/// name SQL INSERT statements write to.
 pub struct ExportWriter {
-    out: BufWriter<File>,
+    out: Box<dyn Write + Send>,
     format: ExportFormat,
-    table: String,
+    target: String,
     columns: Vec<Column>,
     rows: u64,
     error: Option<std::io::Error>,
 }
 
 impl ExportWriter {
+    /// A file writer; `table` is a plain name, quoted here.
     pub fn create(path: &Path, format: ExportFormat, table: &str) -> std::io::Result<Self> {
+        Self::create_for(path, format, quote_ident(table))
+    }
+
+    /// A file writer whose INSERT statements target `target`, already quoted (e.g. `"s"."t"`).
+    pub fn create_for(path: &Path, format: ExportFormat, target: String) -> std::io::Result<Self> {
         Ok(Self {
-            out: BufWriter::new(File::create(path)?),
+            out: Box::new(BufWriter::new(File::create(path)?)),
             format,
-            table: table.to_owned(),
+            target,
             columns: Vec::new(),
             rows: 0,
             error: None,
         })
+    }
+
+    /// Writes `rows` to a string, for copying to the clipboard.
+    pub fn to_text(
+        format: ExportFormat,
+        target: String,
+        columns: Vec<Column>,
+        rows: &[Row],
+    ) -> std::io::Result<String> {
+        let memory = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut writer = Self {
+            out: Box::new(SharedBuffer(memory.clone())),
+            format,
+            target,
+            columns,
+            rows: 0,
+            error: None,
+        };
+        writer.write_header()?;
+        for row in rows {
+            writer.write_row(row)?;
+            writer.rows += 1;
+        }
+        writer.finish()?;
+        let bytes = std::mem::take(&mut *memory.lock().unwrap_or_else(|e| e.into_inner()));
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
     fn write_header(&mut self) -> std::io::Result<()> {
@@ -146,7 +196,7 @@ impl ExportWriter {
                 writeln!(
                     self.out,
                     "INSERT INTO {} ({}) VALUES ({});",
-                    quote_ident(&self.table),
+                    self.target,
                     names.join(", "),
                     values.join(", ")
                 )

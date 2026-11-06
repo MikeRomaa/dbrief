@@ -66,3 +66,32 @@
 .toggle[aria-pressed="true"] {
     color: var(--color-text);
 }
+
+/* The active connection's color tag tints the bar ("Highlight production"). */
+.statusBar[data-tinted] {
+    background: color-mix(in srgb, var(--bar-tint) 18%, var(--color-surface));
+    border-top-color: color-mix(in srgb, var(--bar-tint) 60%, var(--color-border));
+    color: var(--color-text);
+}
+
+.connection {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.connected,
+.disconnected {
+    flex: none;
+    width: 6px;
+    height: 6px;
+}
+
+.connected {
+    background: var(--color-added);
+}
+
+.disconnected {
+    border: 1px solid var(--color-text-faint);
+}

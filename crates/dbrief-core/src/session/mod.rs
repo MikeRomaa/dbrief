@@ -6,6 +6,7 @@
 mod run;
 mod target;
 mod transaction;
+mod values;
 
 #[cfg(test)]
 mod run_tests;
@@ -69,6 +70,8 @@ pub enum SessionError {
 }
 
 /// What the UI shows for an open session (status bar: connection, access level, server version).
+/// `background` marks the connection's background session, which runs the app's own SQL (schema
+/// loading, structure, counts); a connection is connected while it has one.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct SessionInfo {
@@ -77,6 +80,7 @@ pub struct SessionInfo {
     pub engine: Engine,
     pub access_level: AccessLevel,
     pub server_version: String,
+    pub background: bool,
 }
 
 /// Result of a connection test. `latency_ms` is one round trip after connecting.
@@ -192,6 +196,8 @@ pub struct Session {
     transaction: Vec<TransactionStatement>,
     in_transaction: bool,
     transaction_lost: bool,
+    /// Full values of the last table page (see `grid`).
+    pub(crate) page: Option<crate::query::Values>,
 }
 
 impl Session {
@@ -237,6 +243,7 @@ impl Session {
                 engine: target.engine,
                 access_level: target.access_level,
                 server_version,
+                background: false,
             },
             target,
             tunnel,
@@ -247,6 +254,7 @@ impl Session {
             transaction: Vec::new(),
             in_transaction: false,
             transaction_lost: false,
+            page: None,
         })
     }
 
@@ -386,6 +394,10 @@ pub struct SessionManager {
 impl SessionManager {
     pub async fn open(&self, target: ConnectTarget) -> Result<SessionInfo, SessionError> {
         let session = Session::open(target).await?;
+        Ok(self.insert(session).await)
+    }
+
+    async fn insert(&self, session: Session) -> SessionInfo {
         let info = session.info().clone();
         let entry = Entry {
             info: info.clone(),
@@ -393,7 +405,68 @@ impl SessionManager {
             session: Arc::new(Mutex::new(session)),
         };
         self.sessions.lock().await.insert(info.id, entry);
-        Ok(info)
+        info
+    }
+
+    /// The connection's background session, opened with `target` unless it is already open.
+    /// Returns its info and whether it was opened now.
+    pub async fn open_background(
+        &self,
+        target: ConnectTarget,
+    ) -> Result<(SessionInfo, bool), SessionError> {
+        if let Some(info) = self.background_info(target.connection_id).await {
+            return Ok((info, false));
+        }
+
+        let mut session = Session::open(target).await?;
+        session.info.background = true;
+        // Background SQL never needs a transaction of its own.
+        session.mode = TransactionMode::Auto;
+
+        // Another caller may have opened one meanwhile; keep the first.
+        let mut sessions = self.sessions.lock().await;
+        if let Some(existing) = sessions
+            .values()
+            .find(|e| e.info.background && e.info.connection_id == session.info.connection_id)
+        {
+            let info = existing.info.clone();
+            drop(sessions);
+            session.close().await;
+            return Ok((info, false));
+        }
+        let info = session.info().clone();
+        sessions.insert(
+            info.id,
+            Entry {
+                info: info.clone(),
+                cancel: session.cancel_handle(),
+                session: Arc::new(Mutex::new(session)),
+            },
+        );
+        Ok((info, true))
+    }
+
+    async fn background_info(&self, connection_id: Uuid) -> Option<SessionInfo> {
+        self.sessions
+            .lock()
+            .await
+            .values()
+            .find(|e| e.info.background && e.info.connection_id == connection_id)
+            .map(|e| e.info.clone())
+    }
+
+    /// The connection's background session, if it is connected.
+    pub async fn background(
+        &self,
+        connection_id: Uuid,
+    ) -> Result<Arc<Mutex<Session>>, SessionError> {
+        self.sessions
+            .lock()
+            .await
+            .values()
+            .find(|e| e.info.background && e.info.connection_id == connection_id)
+            .map(|e| e.session.clone())
+            .ok_or_else(|| SessionError::Invalid("the connection is not connected".into()))
     }
 
     pub async fn get(&self, id: Uuid) -> Result<Arc<Mutex<Session>>, SessionError> {

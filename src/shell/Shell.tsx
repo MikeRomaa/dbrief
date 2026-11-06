@@ -1,8 +1,10 @@
 import { platform } from "@tauri-apps/plugin-os";
 import { LucideProvider } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ConnectionsView } from "@/connections/ConnectionsView";
+import { ExplorerPanel } from "@/explorer/ExplorerPanel";
+import { useConnectFlow } from "@/hooks/useConnectFlow";
 import { useConnections } from "@/hooks/useConnections";
 import { useFirstLaunch } from "@/hooks/useFirstLaunch";
 import { useLayout } from "@/hooks/useLayout";
@@ -10,8 +12,9 @@ import { useScriptTree } from "@/hooks/useScriptTree";
 import { useSettings } from "@/hooks/useSettings";
 import { useTabs } from "@/hooks/useTabs";
 import { useWindowHeight, useWindowWidth } from "@/hooks/useWindowSize";
+import { activeConnection, explorerConnection } from "@/lib/activeConnection";
 import { createCommandRegistry } from "@/lib/commands";
-import { plural } from "@/lib/connectionFormat";
+import { colorTagVar, plural } from "@/lib/connectionFormat";
 import {
     bottomPanelRenderedHeight,
     maxBottomPanelHeight,
@@ -20,7 +23,9 @@ import {
     SIZES,
     sidePanelRenderedWidth,
 } from "@/lib/layout";
-import { Store } from "@/lib/store";
+import { listenForSchemaChanges } from "@/lib/schemaStore";
+import { Store, useStore } from "@/lib/store";
+import { requestView, revealColumn, type TableRef, tableKey } from "@/lib/tableTabs";
 import { ScriptsPanel } from "@/scripts/ScriptsPanel";
 import { ScriptsWorkspace } from "@/scripts/ScriptsWorkspace";
 import { ActivityRail } from "@/shell/ActivityRail";
@@ -49,6 +54,27 @@ export function Shell() {
     const [searchOpen, setSearchOpen] = useState(false);
     const windowWidth = useWindowWidth();
     const windowHeight = useWindowHeight();
+    const activeId = useStore(activeConnection);
+    const searchConnect = useConnectFlow(connections.persistentSecrets, connections.report);
+
+    // Schema loads (after connect, DDL, or Refresh) reload the Explorer and land in the Log.
+    const names = useRef(connections.index);
+    names.current = connections.index;
+    useEffect(() => listenForSchemaChanges((id) => names.current.connections.get(id)?.name ?? "Schema"), []);
+
+    // Tables open in the editor area, which the Connections view hides.
+    const openTable = useCallback(
+        (table: TableRef, preview: boolean, view?: "data" | "columns", column?: string) => {
+            const key = tableKey(table);
+            tabs.dispatch({ type: "open", path: key, preview });
+            if (layout.activeRailItem === "connections" || layout.activeRailItem === "settings") {
+                dispatch({ type: "openRailItem", item: "explorer" });
+            }
+            if (view) requestView.set({ key, view });
+            if (column) revealColumn.set({ key, column });
+        },
+        [tabs.dispatch, dispatch, layout.activeRailItem],
+    );
 
     useEffect(() => {
         const offs = [
@@ -75,17 +101,20 @@ export function Shell() {
                 }),
             ),
         ];
+        // Shell shortcuts are global: they run in the capture phase, before the editor, grid, inputs or
+        // any other focused component can handle or cancel the key, and the key goes no further.
         const onKeyDown = (e: KeyboardEvent) => {
-            if (e.defaultPrevented || e.isComposing) return;
+            if (e.isComposing) return;
 
             if (registry.handleKey(e)) {
                 e.preventDefault();
+                e.stopPropagation();
             }
         };
 
-        window.addEventListener("keydown", onKeyDown);
+        window.addEventListener("keydown", onKeyDown, true);
         return () => {
-            window.removeEventListener("keydown", onKeyDown);
+            window.removeEventListener("keydown", onKeyDown, true);
 
             for (const off of offs) off();
         };
@@ -118,20 +147,25 @@ export function Shell() {
     const sideWidth = sidePanelRenderedWidth(layout, windowWidth);
     const bottomHeight = bottomPanelRenderedHeight(layout, windowHeight);
     const warnings = [warning, saveError].filter((w): w is string => !!w);
+    const active = activeId ? connections.index.connections.get(activeId) : undefined;
+    const tint =
+        !connectionsView && settings?.appearance.tint_bars ? colorTagVar(active?.color_tag ?? null) : undefined;
 
     return (
         // One size and stroke for every icon in the shell.
         <LucideProvider size={16} strokeWidth={1.75}>
             <CommandsContext value={registry}>
                 <div className={styles.shell}>
-                    <TopBar />
+                    <TopBar tint={tint} />
                     <div className={styles.main}>
                         <ActivityRail layout={layout} />
                         {connectionsView && <ConnectionsView state={connections} />}
                         {!connectionsView && layout.sidePanelVisible && (
                             <>
                                 <SidePanel item={layout.activeRailItem} width={sideWidth}>
-                                    {layout.activeRailItem === "scripts" ? (
+                                    {layout.activeRailItem === "explorer" ? (
+                                        <ExplorerPanel connections={connections} onOpenTable={openTable} />
+                                    ) : layout.activeRailItem === "scripts" ? (
                                         <ScriptsPanel
                                             tree={scriptTree.tree}
                                             error={scriptTree.error}
@@ -193,7 +227,7 @@ export function Shell() {
                             {/* The 1px splitter line is part of the bottom panel's height. */}
                             <BottomPanel layout={layout} height={bottomHeight - 1} />
                         </div>
-                        {!connectionsView && layout.inspectorVisible && <Inspector />}
+                        {!connectionsView && layout.inspectorVisible && <Inspector settings={settings} />}
                     </div>
                     <StatusBar
                         layout={layout}
@@ -209,8 +243,50 @@ export function Shell() {
                                   ]
                                 : undefined
                         }
+                        connection={
+                            active
+                                ? {
+                                      name: active.name,
+                                      accessLevel: active.access_level,
+                                      serverVersion:
+                                          connections.sessions.find((x) => x.connection_id === active.id)
+                                              ?.server_version ??
+                                          active.server_version ??
+                                          null,
+                                      connected: connections.sessions.some(
+                                          (x) => x.background && x.connection_id === active.id,
+                                      ),
+                                  }
+                                : null
+                        }
+                        tint={tint}
                     />
-                    {searchOpen && <SearchPopover onClose={() => setSearchOpen(false)} />}
+                    {searchOpen && (
+                        <SearchPopover
+                            connections={connections}
+                            scripts={scriptTree.tree}
+                            onOpenConnection={(id) => {
+                                explorerConnection.set(id);
+                                dispatch({ type: "openRailItem", item: "explorer" });
+                                const connection = connections.index.connections.get(id);
+                                const connected = connections.sessions.some(
+                                    (x) => x.background && x.connection_id === id,
+                                );
+                                if (connection && !connected) {
+                                    void searchConnect.connect(connection, {}, "background");
+                                }
+                            }}
+                            onOpenTable={(table, column) => openTable(table, false, undefined, column)}
+                            onOpenScript={(path) => {
+                                tabs.dispatch({ type: "open", path, preview: false });
+                                if (layout.activeRailItem === "connections" || layout.activeRailItem === "settings") {
+                                    dispatch({ type: "openRailItem", item: "scripts" });
+                                }
+                            }}
+                            onClose={() => setSearchOpen(false)}
+                        />
+                    )}
+                    {searchConnect.prompt}
                     <TooltipLayer />
                 </div>
             </CommandsContext>

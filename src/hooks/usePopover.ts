@@ -10,7 +10,7 @@ const MARGIN = 8;
  */
 export function usePopoverPosition(
     ref: RefObject<HTMLElement | null>,
-    anchor: HTMLElement,
+    anchor: Pick<HTMLElement, "getBoundingClientRect">,
     align: "start" | "end",
     matchWidth = false,
 ): { left: number; top: number; minWidth?: number } | null {

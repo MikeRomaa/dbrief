@@ -14,7 +14,7 @@ use super::{
     report_described_columns, strip_prefix_ci,
 };
 use crate::connections::{AccessLevel, ConnectionInput, Engine};
-use crate::query::{CancelToken, ResultSink, Row, RunEnd, drive};
+use crate::query::{CancelToken, ResultSink, Row, RunEnd, Value, Values, drive};
 use crate::ssh::Endpoint;
 
 /// Opens the existing file only, never creating one. RO opens with `mode=ro`. sqlx turns on
@@ -111,6 +111,23 @@ impl EngineConnection for SqliteEngineConnection {
         Ok(end)
     }
 
+    async fn fetch_values(&mut self, sql: &str) -> Result<Values, sqlx::Error> {
+        let rows = sqlx::raw_sql(AssertSqlSafe(sql.to_owned()))
+            .fetch_all(&mut self.conn)
+            .await?;
+        let columns = match rows.first() {
+            Some(r) => columns_of(r.columns()),
+            // An empty result still has columns; describing the query gives them.
+            None => (&mut self.conn)
+                .describe(super::user_sql(sql))
+                .await
+                .map(|d| columns_of(d.columns()))
+                .unwrap_or_default(),
+        };
+        let rows = rows.iter().map(sqlite_values).collect();
+        Ok(Values { columns, rows })
+    }
+
     fn cancel_token(&self) -> CancelToken {
         CancelToken::Sqlite(self.interrupt.clone())
     }
@@ -162,6 +179,31 @@ fn sqlite_row(row: &SqliteRow) -> Row {
                 }),
                 _ => row.try_get_unchecked::<String, _>(i).ok(),
             }
+        })
+        .collect()
+}
+
+/// Values by storage class, with BLOBs as bytes.
+fn sqlite_values(row: &SqliteRow) -> Vec<Value> {
+    (0..row.len())
+        .map(|i| {
+            let Ok(value) = row.try_get_raw(i) else {
+                return Value::Null;
+            };
+            if value.is_null() {
+                return Value::Null;
+            }
+            let value = match value.type_info().name() {
+                "INTEGER" => row
+                    .try_get_unchecked::<i64, _>(i)
+                    .map(|v| Value::Text(v.to_string())),
+                "REAL" => row
+                    .try_get_unchecked::<f64, _>(i)
+                    .map(|v| Value::Text(v.to_string())),
+                "BLOB" => row.try_get_unchecked::<Vec<u8>, _>(i).map(Value::Bytes),
+                _ => row.try_get_unchecked::<String, _>(i).map(Value::Text),
+            };
+            value.unwrap_or(Value::Null)
         })
         .collect()
 }

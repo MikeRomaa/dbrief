@@ -42,7 +42,7 @@ export const commands = {
 	/**  Tests the modal's settings. `id` is set when editing, so stored secrets fill in untyped ones. */
 	testConnection: (id: string | null, input: ConnectionInput_Deserialize, prompted: Credentials_Deserialize) => typedError<TestResult, ActionError>(__TAURI_INVOKE("test_connection", { id, input, prompted })),
 	/**  Opens a session. On `secret-required`, ask for that secret and call again with it in `prompted`. */
-	connect: (id: string, prompted: Credentials_Deserialize, remember: boolean) => typedError<Connected_Serialize, ActionError>(__TAURI_INVOKE("connect", { id, prompted, remember })),
+	connect: (id: string, prompted: Credentials_Deserialize, remember: boolean, purpose: ConnectPurpose) => typedError<Connected_Serialize, ActionError>(__TAURI_INVOKE("connect", { id, prompted, remember, purpose })),
 	disconnect: (sessionId: string) => typedError<null, ActionError>(__TAURI_INVOKE("disconnect", { sessionId })),
 	listSessions: () => typedError<SessionInfo[], ActionError>(__TAURI_INVOKE("list_sessions")),
 	/**  Reads a pasted `postgresql://…`, `sqlite:…` URL or file path into connection fields. */
@@ -82,11 +82,32 @@ export const commands = {
 	setSessionSchema: (sessionId: string, schema: string | null) => typedError<null, RunError_Serialize>(__TAURI_INVOKE("set_session_schema", { sessionId, schema })),
 	/**  Runs a read statement again and writes all its rows to `path`. Returns the number of rows. */
 	exportResult: (sessionId: string, sql: string, format: ExportFormat, path: string, table: string) => typedError<number | null, RunError_Serialize>(__TAURI_INVOKE("export_result", { sessionId, sql, format, path, table })),
+	refreshSchema: (connectionId: string) => typedError<null, RunError_Serialize>(__TAURI_INVOKE("refresh_schema", { connectionId })),
+	/**  Closes every session of a connection (its tabs ask about open transactions first). */
+	disconnectConnection: (connectionId: string) => typedError<null, RunError_Serialize>(__TAURI_INVOKE("disconnect_connection", { connectionId })),
+	schemaTree: (connectionId: string) => typedError<SchemaTree_Serialize, RunError_Serialize>(__TAURI_INVOKE("schema_tree", { connectionId })),
+	tableColumns: (connectionId: string, schema: string, table: string) => typedError<SchemaColumn_Serialize[], RunError_Serialize>(__TAURI_INVOKE("table_columns", { connectionId, schema, table })),
+	completionColumns: (connectionId: string) => typedError<CompletionTable[], RunError_Serialize>(__TAURI_INVOKE("completion_columns", { connectionId })),
+	searchSchema: (query: string, limit: number) => typedError<SearchHit_Serialize[], RunError_Serialize>(__TAURI_INVOKE("search_schema", { query, limit })),
+	tableStructure: (connectionId: string, object: ObjectRef_Deserialize) => typedError<TableStructure_Serialize, RunError_Serialize>(__TAURI_INVOKE("table_structure", { connectionId, object })),
+	objectDdl: (connectionId: string, object: ObjectRef_Deserialize) => typedError<string, RunError_Serialize>(__TAURI_INVOKE("object_ddl", { connectionId, object })),
+	countRows: (connectionId: string, query: TableQuery_Deserialize) => typedError<RowCount, RunError_Serialize>(__TAURI_INVOKE("count_rows", { connectionId, query })),
+	tablePage: (sessionId: string, kind: ObjectKind, query: TableQuery_Deserialize, limit: number, offset: number | null) => typedError<TablePage_Serialize, RunError_Serialize>(__TAURI_INVOKE("table_page", { sessionId, kind, query, limit, offset })),
+	pageValue: (sessionId: string, row: number, column: number) => typedError<FullValue_Serialize, RunError_Serialize>(__TAURI_INVOKE("page_value", { sessionId, row, column })),
+	savePageValue: (sessionId: string, row: number, column: number, path: string) => typedError<null, RunError_Serialize>(__TAURI_INVOKE("save_page_value", { sessionId, row, column, path })),
+	findInPage: (sessionId: string, text: string) => typedError<([number, number])[], RunError_Serialize>(__TAURI_INVOKE("find_in_page", { sessionId, text })),
+	copyPage: (sessionId: string, rows: number[], columns: number[], format: CopyFormat, query: TableQuery_Deserialize) => typedError<string, RunError_Serialize>(__TAURI_INVOKE("copy_page", { sessionId, rows, columns, format, query })),
+	/**  Writes every row matching the filter, in the grid's sort, to `path`. Returns the number of rows. */
+	exportTable: (sessionId: string, kind: ObjectKind, query: TableQuery_Deserialize, format: ExportFormat, path: string) => typedError<number | null, RunError_Serialize>(__TAURI_INVOKE("export_table", { sessionId, kind, query, format, path })),
+	tableLayout: (connectionId: string, schema: string, table: string) => typedError<string | null, RunError_Serialize>(__TAURI_INVOKE("table_layout", { connectionId, schema, table })),
+	setTableLayout: (connectionId: string, schema: string, table: string, layout: string) => typedError<null, RunError_Serialize>(__TAURI_INVOKE("set_table_layout", { connectionId, schema, table, layout })),
 };
 
 /** Events */
 export const events = {
+	schemaChanged: makeEvent<SchemaChanged_Serialize, SchemaChanged_Deserialize>("schema-changed"),
 	scriptsChanged: makeEvent<ScriptsChanged, ScriptsChanged>("scripts-changed"),
+	sessionsChanged: makeEvent<SessionsChanged, SessionsChanged>("sessions-changed"),
 };
 
 /* Types */
@@ -101,11 +122,31 @@ export type Appearance = Appearance_Serialize | Appearance_Deserialize;
 
 export type Appearance_Deserialize = {
 	theme?: Theme,
+	tint_bars?: boolean,
 };
 
 export type Appearance_Serialize = {
 	theme: Theme,
+	tint_bars: boolean,
 };
+
+/**
+ *  What a grid cell shows: text, text cut short at [`CELL_TEXT_LIMIT`] characters (`length` is the
+ *  whole value's), or a binary value's size. NULL is `null`.
+ */
+export type Cell = Cell_Serialize | Cell_Deserialize;
+
+/**
+ *  What a grid cell shows: text, text cut short at [`CELL_TEXT_LIMIT`] characters (`length` is the
+ *  whole value's), or a binary value's size. NULL is `null`.
+ */
+export type Cell_Deserialize = string | ({ cut: string; length: number }) & { binary?: never; image?: never } | ({ binary: number; image?: ImageKind | null }) & { cut?: never; length?: never };
+
+/**
+ *  What a grid cell shows: text, text cut short at [`CELL_TEXT_LIMIT`] characters (`length` is the
+ *  whole value's), or a binary value's size. NULL is `null`.
+ */
+export type Cell_Serialize = string | ({ cut: string; length: number }) & { binary?: never; image?: never } | ({ binary: number; image: ImageKind | null }) & { cut?: never; length?: never };
 
 /**  A result column and its database type name (e.g. `int4`, `TEXT`). */
 export type Column = {
@@ -113,19 +154,46 @@ export type Column = {
 	type_name: string,
 };
 
-/**  An opened session. `warning` is set when the prompted secrets couldn't be remembered. */
+/**  A table's column names, for autocomplete. */
+export type CompletionTable = {
+	schema: string,
+	table: string,
+	columns: string[],
+};
+
+/**
+ *  What a connect is for: a tab's own session (which also connects the background session), or just
+ *  the connection's background session (Connections view, Explorer, search).
+ */
+export type ConnectPurpose = "tab" | "background";
+
+/**
+ *  An opened session. `warning` is set when the prompted secrets couldn't be remembered.
+ *  `background_opened` is true when the connection's background session was opened by this call,
+ *  so its schema should be loaded.
+ */
 export type Connected = Connected_Serialize | Connected_Deserialize;
 
-/**  An opened session. `warning` is set when the prompted secrets couldn't be remembered. */
+/**
+ *  An opened session. `warning` is set when the prompted secrets couldn't be remembered.
+ *  `background_opened` is true when the connection's background session was opened by this call,
+ *  so its schema should be loaded.
+ */
 export type Connected_Deserialize = {
 	session: SessionInfo,
 	warning?: string | null,
+	background_opened: boolean,
 };
 
-/**  An opened session. `warning` is set when the prompted secrets couldn't be remembered. */
+/**
+ *  An opened session. `warning` is set when the prompted secrets couldn't be remembered.
+ *  `background_opened` is true when the connection's background session was opened by this call,
+ *  so its schema should be loaded.
+ */
 export type Connected_Serialize = {
 	session: SessionInfo,
 	warning: string | null,
+	background_opened: boolean,
 };
 
 /**  A saved connection. Timestamps are ISO 8601 UTC strings. */
@@ -226,6 +294,34 @@ export type Connection_Serialize = {
 	server_version: string | null,
 } & ConnectionInput_Serialize;
 
+/**
+ *  `kind` is "primary key", "unique", "foreign key", "check" or "exclusion"; `definition` is the
+ *  constraint's clause, e.g. `FOREIGN KEY (a) REFERENCES t (id) ON DELETE CASCADE`.
+ */
+export type ConstraintInfo = ConstraintInfo_Serialize | ConstraintInfo_Deserialize;
+
+/**
+ *  `kind` is "primary key", "unique", "foreign key", "check" or "exclusion"; `definition` is the
+ *  constraint's clause, e.g. `FOREIGN KEY (a) REFERENCES t (id) ON DELETE CASCADE`.
+ */
+export type ConstraintInfo_Deserialize = {
+	name?: string | null,
+	kind: string,
+	definition: string,
+};
+
+/**
+ *  `kind` is "primary key", "unique", "foreign key", "check" or "exclusion"; `definition` is the
+ *  constraint's clause, e.g. `FOREIGN KEY (a) REFERENCES t (id) ON DELETE CASCADE`.
+ */
+export type ConstraintInfo_Serialize = {
+	name: string | null,
+	kind: string,
+	definition: string,
+};
+
+export type CopyFormat = "tsv" | "tsv-with-headers" | "insert" | "json";
+
 /**  Secrets for connecting, from the credential store or a prompt. Never part of the connection. */
 export type Credentials = Credentials_Serialize | Credentials_Deserialize;
 
@@ -247,10 +343,14 @@ export type DataGrid = DataGrid_Serialize | DataGrid_Deserialize;
 
 export type DataGrid_Deserialize = {
 	page_size?: number,
+	null_display?: NullDisplay,
+	json_truncation?: number,
 };
 
 export type DataGrid_Serialize = {
 	page_size: number,
+	null_display: NullDisplay,
+	json_truncation: number,
 };
 
 /**
@@ -319,6 +419,85 @@ export type Folder_Serialize = {
 	sort_order: number | null,
 };
 
+/**
+ *  A value in full, for the inspector. `text` holds text values; binary values have their `size`, a
+ *  hex preview of the first bytes and, for PNG and JPEG up to a few MB, the image as a data URL.
+ */
+export type FullValue = FullValue_Serialize | FullValue_Deserialize;
+
+/**
+ *  A value in full, for the inspector. `text` holds text values; binary values have their `size`, a
+ *  hex preview of the first bytes and, for PNG and JPEG up to a few MB, the image as a data URL.
+ */
+export type FullValue_Deserialize = {
+	null: boolean,
+	text?: string | null,
+	size: number,
+	hex?: string | null,
+	image?: string | null,
+};
+
+/**
+ *  A value in full, for the inspector. `text` holds text values; binary values have their `size`, a
+ *  hex preview of the first bytes and, for PNG and JPEG up to a few MB, the image as a data URL.
+ */
+export type FullValue_Serialize = {
+	null: boolean,
+	text: string | null,
+	size: number,
+	hex: string | null,
+	image: string | null,
+};
+
+/**  One page of a table, as the grid shows it. */
+export type GridPage = GridPage_Serialize | GridPage_Deserialize;
+
+/**  One page of a table, as the grid shows it. */
+export type GridPage_Deserialize = {
+	columns: Column[],
+	cells: ((Cell_Deserialize | null)[])[],
+	duration_ms: number | null,
+};
+
+/**  One page of a table, as the grid shows it. */
+export type GridPage_Serialize = {
+	columns: Column[],
+	cells: ((Cell_Serialize | null)[])[],
+	duration_ms: number | null,
+};
+
+export type ImageKind = "png" | "jpeg";
+
+/**
+ *  `columns` lists the indexed columns or expressions; `definition` is the statement that creates
+ *  the index, when the database has one (SQLite's automatic indexes don't).
+ */
+export type IndexInfo = IndexInfo_Serialize | IndexInfo_Deserialize;
+
+/**
+ *  `columns` lists the indexed columns or expressions; `definition` is the statement that creates
+ *  the index, when the database has one (SQLite's automatic indexes don't).
+ */
+export type IndexInfo_Deserialize = {
+	name: string,
+	columns: string,
+	unique: boolean,
+	primary: boolean,
+	definition?: string | null,
+};
+
+/**
+ *  `columns` lists the indexed columns or expressions; `definition` is the statement that creates
+ *  the index, when the database has one (SQLite's automatic indexes don't).
+ */
+export type IndexInfo_Serialize = {
+	name: string,
+	columns: string,
+	unique: boolean,
+	primary: boolean,
+	definition: string | null,
+};
+
 /**  A folder or a connection, e.g. the item being moved or deleted. */
 export type ItemRef = { kind: "folder"; id: string } | { kind: "connection"; id: string };
 
@@ -345,6 +524,32 @@ export type MoreRows_Serialize = {
 export type Notice = {
 	level: string,
 	message: string,
+};
+
+/**  How NULL shows in the data grid. */
+export type NullDisplay = "null" | "symbol" | "blank";
+
+export type ObjectKind = 
+/**  A PostgreSQL schema, listed so empty schemas still show. */
+"schema" | "table" | "view" | "materialized-view" | "function" | "sequence" | "index" | "trigger";
+
+/**  Names one object of a connection. `detail` tells overloaded functions apart. */
+export type ObjectRef = ObjectRef_Serialize | ObjectRef_Deserialize;
+
+/**  Names one object of a connection. `detail` tells overloaded functions apart. */
+export type ObjectRef_Deserialize = {
+	schema: string,
+	name: string,
+	kind: ObjectKind,
+	detail?: string | null,
+};
+
+/**  Names one object of a connection. `detail` tells overloaded functions apart. */
+export type ObjectRef_Serialize = {
+	schema: string,
+	name: string,
+	kind: ObjectKind,
+	detail: string | null,
 };
 
 /**
@@ -408,6 +613,13 @@ export type QueryError_Serialize = {
 export type Removed = {
 	connections: string[],
 	secret_errors: string[],
+};
+
+/**  An exact row count, and the SQL that counted (for the Log). */
+export type RowCount = {
+	count: number | null,
+	sql: string,
+	duration_ms: number | null,
 };
 
 /**
@@ -489,6 +701,113 @@ export type Saved_Serialize = {
 	warning: string | null,
 };
 
+/**  A connection's schema was loaded into the cache (or loading failed: `error`). */
+export type SchemaChanged = SchemaChanged_Serialize | SchemaChanged_Deserialize;
+
+/**  A connection's schema was loaded into the cache (or loading failed: `error`). */
+export type SchemaChanged_Deserialize = {
+	connection_id: string,
+	objects: number,
+	duration_ms: number | null,
+	error?: string | null,
+};
+
+/**  A connection's schema was loaded into the cache (or loading failed: `error`). */
+export type SchemaChanged_Serialize = {
+	connection_id: string,
+	objects: number,
+	duration_ms: number | null,
+	error: string | null,
+};
+
+/**
+ *  A table or view column. `ordinal` is its position (PostgreSQL's `attnum`, which can have gaps);
+ *  `pk_ordinal` its 1-based position in the primary key.
+ */
+export type SchemaColumn = SchemaColumn_Serialize | SchemaColumn_Deserialize;
+
+/**
+ *  A table or view column. `ordinal` is its position (PostgreSQL's `attnum`, which can have gaps);
+ *  `pk_ordinal` its 1-based position in the primary key.
+ */
+export type SchemaColumn_Deserialize = {
+	schema: string,
+	table_name: string,
+	ordinal: number,
+	name: string,
+	type_name: string,
+	nullable: boolean,
+	default_value?: string | null,
+	pk_ordinal?: number | null,
+};
+
+/**
+ *  A table or view column. `ordinal` is its position (PostgreSQL's `attnum`, which can have gaps);
+ *  `pk_ordinal` its 1-based position in the primary key.
+ */
+export type SchemaColumn_Serialize = {
+	schema: string,
+	table_name: string,
+	ordinal: number,
+	name: string,
+	type_name: string,
+	nullable: boolean,
+	default_value: string | null,
+	pk_ordinal: number | null,
+};
+
+/**
+ *  One database object. `parent` is the table of an index or trigger; `detail` holds a function's
+ *  arguments and result. Estimates come from the database's statistics and are `None` when it has
+ *  none.
+ */
+export type SchemaObject = SchemaObject_Serialize | SchemaObject_Deserialize;
+
+/**
+ *  One database object. `parent` is the table of an index or trigger; `detail` holds a function's
+ *  arguments and result. Estimates come from the database's statistics and are `None` when it has
+ *  none.
+ */
+export type SchemaObject_Deserialize = {
+	schema: string,
+	name: string,
+	kind: ObjectKind,
+	parent?: string | null,
+	detail?: string | null,
+	estimated_rows?: number | null,
+	size_bytes?: number | null,
+};
+
+/**
+ *  One database object. `parent` is the table of an index or trigger; `detail` holds a function's
+ *  arguments and result. Estimates come from the database's statistics and are `None` when it has
+ *  none.
+ */
+export type SchemaObject_Serialize = {
+	schema: string,
+	name: string,
+	kind: ObjectKind,
+	parent: string | null,
+	detail: string | null,
+	estimated_rows: number | null,
+	size_bytes: number | null,
+};
+
+/**  The cached schema of a connection; `refreshed_at` is `None` when it was never loaded. */
+export type SchemaTree = SchemaTree_Serialize | SchemaTree_Deserialize;
+
+/**  The cached schema of a connection; `refreshed_at` is `None` when it was never loaded. */
+export type SchemaTree_Deserialize = {
+	objects: SchemaObject_Deserialize[],
+	refreshed_at?: string | null,
+};
+
+/**  The cached schema of a connection; `refreshed_at` is `None` when it was never loaded. */
+export type SchemaTree_Serialize = {
+	objects: SchemaObject_Serialize[],
+	refreshed_at: string | null,
+};
+
 export type ScriptMeta = ScriptMeta_Serialize | ScriptMeta_Deserialize;
 
 export type ScriptMeta_Deserialize = {
@@ -513,6 +832,44 @@ export type ScriptNode = { kind: "folder"; path: string; name: string; children:
 export type ScriptsChanged = {
 	paths: string[],
 };
+
+/**
+ *  A table (or view) or column found by search. `object_kind` is the kind of the table it is or
+ *  belongs to; `column` is set for columns.
+ */
+export type SearchHit = SearchHit_Serialize | SearchHit_Deserialize;
+
+/**
+ *  A table (or view) or column found by search. `object_kind` is the kind of the table it is or
+ *  belongs to; `column` is set for columns.
+ */
+export type SearchHit_Deserialize = {
+	kind: SearchKind,
+	connection_id: string,
+	schema: string,
+	table: string,
+	object_kind: ObjectKind,
+	column?: string | null,
+	type_name?: string | null,
+	score: number,
+};
+
+/**
+ *  A table (or view) or column found by search. `object_kind` is the kind of the table it is or
+ *  belongs to; `column` is set for columns.
+ */
+export type SearchHit_Serialize = {
+	kind: SearchKind,
+	connection_id: string,
+	schema: string,
+	table: string,
+	object_kind: ObjectKind,
+	column: string | null,
+	type_name: string | null,
+	score: number,
+};
+
+export type SearchKind = "table" | "column";
 
 /**  What to do with one secret when saving a connection. */
 export type SecretChange = { action: "keep" } | { action: "set"; value: string } | { action: "clear" };
@@ -545,14 +902,22 @@ export type SecretChanges_Serialize = {
 
 export type SecretKind = "password" | "ssh-password" | "ssh-passphrase";
 
-/**  What the UI shows for an open session (status bar: connection, access level, server version). */
+/**
+ *  What the UI shows for an open session (status bar: connection, access level, server version).
+ *  `background` marks the connection's background session, which runs the app's own SQL (schema
+ *  loading, structure, counts); a connection is connected while it has one.
+ */
 export type SessionInfo = {
 	id: string,
 	connection_id: string,
 	engine: Engine,
 	access_level: AccessLevel,
 	server_version: string,
+	background: boolean,
 };
+
+/**  Sessions were opened or closed, so "connected" changed for some connection. */
+export type SessionsChanged = Record<string, never>;
 
 /**  All settings. Each field is a TOML table matching a section of the Settings view. */
 export type Settings = Settings_Serialize | Settings_Deserialize;
@@ -619,6 +984,67 @@ export type SslMode = "disable" | "allow" | "prefer" | "require" | "verify-ca" |
 
 /**  Ordered from least to most privileged, so the label of several statements is the highest one. */
 export type StatementKind = "read" | "write" | "ddl";
+
+/**
+ *  A page of a table. `sql` is the query that ran; `unordered` means no sort applies, so rows may
+ *  move between pages.
+ */
+export type TablePage = TablePage_Serialize | TablePage_Deserialize;
+
+/**
+ *  A page of a table. `sql` is the query that ran; `unordered` means no sort applies, so rows may
+ *  move between pages.
+ */
+export type TablePage_Deserialize = {
+	page: GridPage_Deserialize,
+	sql: string,
+	unordered: boolean,
+};
+
+/**
+ *  A page of a table. `sql` is the query that ran; `unordered` means no sort applies, so rows may
+ *  move between pages.
+ */
+export type TablePage_Serialize = {
+	page: GridPage_Serialize,
+	sql: string,
+	unordered: boolean,
+};
+
+/**  A table or view with the user's filter (`WHERE` text) and sort (`ORDER BY` text). */
+export type TableQuery = TableQuery_Serialize | TableQuery_Deserialize;
+
+/**  A table or view with the user's filter (`WHERE` text) and sort (`ORDER BY` text). */
+export type TableQuery_Deserialize = {
+	schema: string,
+	name: string,
+	filter?: string | null,
+	order?: string | null,
+};
+
+/**  A table or view with the user's filter (`WHERE` text) and sort (`ORDER BY` text). */
+export type TableQuery_Serialize = {
+	schema: string,
+	name: string,
+	filter: string | null,
+	order: string | null,
+};
+
+export type TableStructure = TableStructure_Serialize | TableStructure_Deserialize;
+
+export type TableStructure_Deserialize = {
+	columns: SchemaColumn_Deserialize[],
+	indexes: IndexInfo_Deserialize[],
+	constraints: ConstraintInfo_Deserialize[],
+	triggers: TriggerInfo[],
+};
+
+export type TableStructure_Serialize = {
+	columns: SchemaColumn_Serialize[],
+	indexes: IndexInfo_Serialize[],
+	constraints: ConstraintInfo_Serialize[],
+	triggers: TriggerInfo[],
+};
 
 /**  Result of a connection test. `latency_ms` is one round trip after connecting. */
 export type TestResult = {
@@ -689,6 +1115,12 @@ export type TreeNode_Serialize = {
 } & FolderNode_Serialize | {
 	kind: "connection",
 } & Connection_Serialize;
+
+export type TriggerInfo = {
+	name: string,
+	enabled: boolean,
+	definition: string,
+};
 
 /**
  *  Connection fields read from a URL ("Paste a connection URL", the Fields/URL toggle). The password

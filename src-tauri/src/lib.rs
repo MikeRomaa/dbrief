@@ -3,11 +3,13 @@
 mod commands;
 mod connections;
 mod run;
+mod schema;
 mod scripts;
 
 use std::sync::Mutex;
 
 use dbrief_core::connections::ConnectionRepo;
+use dbrief_core::schema::SchemaCache;
 use dbrief_core::scripts::ScriptWatcher;
 use dbrief_core::scripts::meta::ScriptMetaRepo;
 use dbrief_core::secrets::Secrets;
@@ -22,6 +24,7 @@ pub struct AppState {
     pub connections: ConnectionRepo,
     pub secrets: Secrets,
     pub sessions: SessionManager,
+    pub schema: SchemaCache,
     pub ssh_env: SshEnv,
     pub script_meta: ScriptMetaRepo,
     pub script_watcher: Mutex<Option<ScriptWatcher>>,
@@ -30,7 +33,11 @@ pub struct AppState {
 /// Builds the tauri-specta command set. Also used by the `export_bindings` test.
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new()
-        .events(tauri_specta::collect_events![scripts::ScriptsChanged])
+        .events(tauri_specta::collect_events![
+            scripts::ScriptsChanged,
+            schema::SchemaChanged,
+            schema::SessionsChanged
+        ])
         .commands(tauri_specta::collect_commands![
             commands::get_settings,
             commands::update_settings,
@@ -80,6 +87,23 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             run::acknowledge_lost_transaction,
             run::set_session_schema,
             run::export_result,
+            schema::refresh_schema,
+            schema::disconnect_connection,
+            schema::schema_tree,
+            schema::table_columns,
+            schema::completion_columns,
+            schema::search_schema,
+            schema::table_structure,
+            schema::object_ddl,
+            schema::count_rows,
+            schema::table_page,
+            schema::page_value,
+            schema::save_page_value,
+            schema::find_in_page,
+            schema::copy_page,
+            schema::export_table,
+            schema::table_layout,
+            schema::set_table_layout,
         ])
 }
 
@@ -119,6 +143,7 @@ pub fn run() {
                 settings: Mutex::new(settings),
                 secrets: Secrets::detect(),
                 sessions: SessionManager::default(),
+                schema: SchemaCache::new(storage_pool.clone()),
                 ssh_env: SshEnv::new(&data_dir),
                 script_meta: ScriptMetaRepo::new(storage_pool),
                 script_watcher: Mutex::new(None),

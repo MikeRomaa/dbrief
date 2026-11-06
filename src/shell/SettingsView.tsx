@@ -1,13 +1,20 @@
 import { useState } from "react";
 
 import { backend, type Settings } from "@/lib/backend";
-import type { Theme } from "@/lib/bindings";
+import type { NullDisplay, Theme } from "@/lib/bindings";
 import { FolderField } from "@/shell/FolderField";
 import { ThemePicker } from "@/shell/ThemePicker";
+import { Segmented } from "@/ui/Segmented";
 import { Stepper } from "@/ui/Stepper";
 import { Switch } from "@/ui/Switch";
 
 import styles from "@/shell/SettingsView.module.css";
+
+const NULL_OPTIONS = [
+    { value: "null", label: "NULL" },
+    { value: "symbol", label: "∅" },
+    { value: "blank", label: "Blank" },
+] as const;
 
 interface SettingsViewProps {
     settings: Settings | null;
@@ -21,6 +28,8 @@ export function SettingsView({ settings, onThemeChange, onScriptsFolderChange, o
     const scriptsFolder = settings?.editor.scripts_folder;
     const setEditor = (change: Partial<Settings["editor"]>) =>
         settings && onChange({ ...settings, editor: { ...settings.editor, ...change } });
+    const setAppearance = (change: Partial<Settings["appearance"]>) =>
+        settings && onChange({ ...settings, appearance: { ...settings.appearance, ...change } });
     const setDataGrid = (change: Partial<Settings["data_grid"]>) =>
         settings && onChange({ ...settings, data_grid: { ...settings.data_grid, ...change } });
     const [folderError, setFolderError] = useState<string | null>(null);
@@ -57,6 +66,24 @@ export function SettingsView({ settings, onThemeChange, onScriptsFolderChange, o
                         describedBy="theme-description"
                     />
                 </div>
+                {settings && (
+                    <div className={styles.setting}>
+                        <div className={styles.settingText}>
+                            <div>Tint bars with the connection color</div>
+                            <p className={styles.settingDescription}>
+                                The top and status bars take the active connection's color tag, e.g. red for production.
+                            </p>
+                        </div>
+                        <span className={styles.switch}>
+                            <Switch
+                                label="Tint bars with the connection color"
+                                labelHidden
+                                checked={settings.appearance.tint_bars}
+                                onChange={(on) => setAppearance({ tint_bars: on })}
+                            />
+                        </span>
+                    </div>
+                )}
             </section>
             <section id="settings-editor" className={styles.section} aria-labelledby="settings-editor-title">
                 <h2 id="settings-editor-title" className={styles.sectionTitle}>
@@ -121,7 +148,7 @@ export function SettingsView({ settings, onThemeChange, onScriptsFolderChange, o
                             <div className={styles.settingText}>
                                 <div>Autocomplete</div>
                                 <p className={styles.settingDescription}>
-                                    Suggests SQL keywords and functions as you type.
+                                    Suggests SQL keywords, functions, tables and columns as you type.
                                 </p>
                             </div>
                             <span className={styles.switch}>
@@ -157,22 +184,55 @@ export function SettingsView({ settings, onThemeChange, onScriptsFolderChange, o
                     Data grid
                 </h2>
                 {settings && (
-                    <div className={styles.setting}>
-                        <div className={styles.settingText}>
-                            <div id="page-size-label">Page size</div>
-                            <p className={styles.settingDescription}>
-                                Rows fetched at a time; Load more fetches the next page.
-                            </p>
+                    <>
+                        <div className={styles.setting}>
+                            <div className={styles.settingText}>
+                                <div id="page-size-label">Page size</div>
+                                <p className={styles.settingDescription}>
+                                    Rows a table page shows, and rows Load more fetches in script results.
+                                </p>
+                            </div>
+                            <Stepper
+                                value={settings.data_grid.page_size}
+                                min={10}
+                                max={10000}
+                                step={50}
+                                labelledBy="page-size-label"
+                                onChange={(n) => setDataGrid({ page_size: n })}
+                            />
                         </div>
-                        <Stepper
-                            value={settings.data_grid.page_size}
-                            min={10}
-                            max={10000}
-                            step={50}
-                            labelledBy="page-size-label"
-                            onChange={(n) => setDataGrid({ page_size: n })}
-                        />
-                    </div>
+                        <div className={styles.setting}>
+                            <div className={styles.settingText}>
+                                <div id="null-display-label">NULL display</div>
+                                <p id="null-display-description" className={styles.settingDescription}>
+                                    How NULL shows in grid cells. It always looks different from text.
+                                </p>
+                            </div>
+                            <Segmented<NullDisplay>
+                                value={settings.data_grid.null_display}
+                                options={NULL_OPTIONS}
+                                labelledBy="null-display-label"
+                                describedBy="null-display-description"
+                                onChange={(v) => setDataGrid({ null_display: v })}
+                            />
+                        </div>
+                        <div className={styles.setting}>
+                            <div className={styles.settingText}>
+                                <div id="json-truncation-label">JSON truncation length</div>
+                                <p className={styles.settingDescription}>
+                                    Characters of a JSON value shown in a cell; the inspector shows all of it.
+                                </p>
+                            </div>
+                            <Stepper
+                                value={settings.data_grid.json_truncation}
+                                min={20}
+                                max={1000}
+                                step={20}
+                                labelledBy="json-truncation-label"
+                                onChange={(n) => setDataGrid({ json_truncation: n })}
+                            />
+                        </div>
+                    </>
                 )}
             </section>
         </div>

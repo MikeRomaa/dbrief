@@ -1,28 +1,41 @@
 import {
     type ActionError,
+    type CompletionTable,
     type Connected_Serialize,
     type Connection_Serialize,
     type ConnectionInput_Deserialize,
     type ConnectionTree_Serialize,
+    type ConnectPurpose,
+    type CopyFormat,
     type Credentials_Deserialize,
     commands,
     type DeleteCounts,
     type ExportFormat,
     type Folder_Serialize,
+    type FullValue_Serialize,
     type ItemRef,
     type MoreRows_Serialize,
+    type ObjectKind,
+    type ObjectRef_Deserialize,
     type OpenedFile_Serialize,
     type Removed,
+    type RowCount,
     type RunError_Serialize,
     type RunOutput_Serialize,
     type Saved_Serialize,
     type SavedSecrets,
+    type SchemaColumn_Serialize,
+    type SchemaTree_Serialize,
     type ScriptMeta_Serialize,
     type ScriptNode,
+    type SearchHit_Serialize,
     type SecretChanges_Deserialize,
     type SessionInfo,
     type Settings_Serialize,
     type SettingsResponse_Serialize,
+    type TablePage_Serialize,
+    type TableQuery_Deserialize,
+    type TableStructure_Serialize,
     type TestResult,
     type TransactionMode,
     type TransactionState_Serialize,
@@ -130,8 +143,12 @@ export const backend = {
     setPinned: (id: string, pinned: boolean): Promise<null> => unwrapAction(commands.setPinned(id, pinned)),
     deleteCounts: (item: ItemRef): Promise<DeleteCounts> => unwrapAction(commands.deleteCounts(item)),
     removeItem: (item: ItemRef): Promise<Removed> => unwrapAction(commands.removeItem(item)),
-    connect: (id: string, prompted: Credentials, remember: boolean): Promise<Connected_Serialize> =>
-        unwrapAction(commands.connect(id, prompted, remember)),
+    connect: (
+        id: string,
+        prompted: Credentials,
+        remember: boolean,
+        purpose: ConnectPurpose = "tab",
+    ): Promise<Connected_Serialize> => unwrapAction(commands.connect(id, prompted, remember, purpose)),
     disconnect: (sessionId: string): Promise<null> => unwrapAction(commands.disconnect(sessionId)),
     listSessions: (): Promise<SessionInfo[]> => unwrapAction(commands.listSessions()),
     openSqliteFile: (path: string): Promise<OpenedFile_Serialize> => unwrapAction(commands.openSqliteFile(path)),
@@ -174,4 +191,53 @@ export const backend = {
         table: string,
     ): Promise<number> =>
         unwrapRun(commands.exportResult(sessionId, sql, format, path, table)).then((rows) => rows ?? 0),
+
+    refreshSchema: (connectionId: string): Promise<null> => unwrapRun(commands.refreshSchema(connectionId)),
+    disconnectConnection: (connectionId: string): Promise<null> =>
+        unwrapRun(commands.disconnectConnection(connectionId)),
+    schemaTree: (connectionId: string): Promise<SchemaTree_Serialize> => unwrapRun(commands.schemaTree(connectionId)),
+    tableColumns: (connectionId: string, schema: string, table: string): Promise<SchemaColumn_Serialize[]> =>
+        unwrapRun(commands.tableColumns(connectionId, schema, table)),
+    completionColumns: (connectionId: string): Promise<CompletionTable[]> =>
+        unwrapRun(commands.completionColumns(connectionId)),
+    searchSchema: (query: string, limit: number): Promise<SearchHit_Serialize[]> =>
+        unwrapRun(commands.searchSchema(query, limit)),
+    tableStructure: (connectionId: string, object: ObjectRef_Deserialize): Promise<TableStructure_Serialize> =>
+        unwrapRun(commands.tableStructure(connectionId, object)),
+    objectDdl: (connectionId: string, object: ObjectRef_Deserialize): Promise<string> =>
+        unwrapRun(commands.objectDdl(connectionId, object)),
+    countRows: (connectionId: string, query: TableQuery_Deserialize): Promise<RowCount> =>
+        unwrapRun(commands.countRows(connectionId, query)),
+    tablePage: (
+        sessionId: string,
+        kind: ObjectKind,
+        query: TableQuery_Deserialize,
+        limit: number,
+        offset: number,
+    ): Promise<TablePage_Serialize> => unwrapRun(commands.tablePage(sessionId, kind, query, limit, offset)),
+    pageValue: (sessionId: string, row: number, column: number): Promise<FullValue_Serialize> =>
+        unwrapRun(commands.pageValue(sessionId, row, column)),
+    savePageValue: (sessionId: string, row: number, column: number, path: string): Promise<null> =>
+        unwrapRun(commands.savePageValue(sessionId, row, column, path)),
+    findInPage: (sessionId: string, text: string): Promise<[number, number][]> =>
+        unwrapRun(commands.findInPage(sessionId, text)),
+    copyPage: (
+        sessionId: string,
+        rows: number[],
+        columns: number[],
+        format: CopyFormat,
+        query: TableQuery_Deserialize,
+    ): Promise<string> => unwrapRun(commands.copyPage(sessionId, rows, columns, format, query)),
+    exportTable: (
+        sessionId: string,
+        kind: ObjectKind,
+        query: TableQuery_Deserialize,
+        format: ExportFormat,
+        path: string,
+    ): Promise<number> =>
+        unwrapRun(commands.exportTable(sessionId, kind, query, format, path)).then((rows) => rows ?? 0),
+    tableLayout: (connectionId: string, schema: string, table: string): Promise<string | null> =>
+        unwrapRun(commands.tableLayout(connectionId, schema, table)),
+    setTableLayout: (connectionId: string, schema: string, table: string, layout: string): Promise<null> =>
+        unwrapRun(commands.setTableLayout(connectionId, schema, table, layout)),
 };

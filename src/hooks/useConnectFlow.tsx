@@ -2,7 +2,7 @@ import { type ReactNode, useRef, useState } from "react";
 
 import { SecretPrompt } from "@/connections/dialogs";
 import { ActionFailure, backend, type Credentials, errorMessage } from "@/lib/backend";
-import type { SecretKind, SessionInfo } from "@/lib/bindings";
+import type { ConnectPurpose, SecretKind, SessionInfo } from "@/lib/bindings";
 import type { Connection } from "@/lib/connectionTree";
 
 const SECRET_FIELDS: Record<SecretKind, keyof Credentials> = {
@@ -16,19 +16,22 @@ interface Prompt {
     secret: SecretKind;
     problem: string | null;
     prompted: Credentials;
+    purpose: ConnectPurpose;
     resolve: (session: SessionInfo | null) => void;
 }
 
 /**
  * Opens a session for a connection, asking for a password or passphrase when one is needed (render
  * `prompt`). `connect` resolves to the session, or `null` when the user cancels or it fails; failures
- * go to `onError`. `prompted` passes secrets already typed elsewhere (the connection form).
+ * go to `onError`. `prompted` passes secrets already typed elsewhere (the connection form). A `tab`
+ * connect opens the tab's own session (and the connection's background session); `background`
+ * only connects the connection.
  */
 export function useConnectFlow(
     persistentSecrets: boolean,
     onError: (message: string) => void,
 ): {
-    connect: (connection: Connection, prompted?: Credentials) => Promise<SessionInfo | null>;
+    connect: (connection: Connection, prompted?: Credentials, purpose?: ConnectPurpose) => Promise<SessionInfo | null>;
     prompt: ReactNode;
 } {
     const [prompt, setPrompt] = useState<Prompt | null>(null);
@@ -39,10 +42,11 @@ export function useConnectFlow(
         connection: Connection,
         prompted: Credentials,
         remember: boolean,
+        purpose: ConnectPurpose,
         resolve: (session: SessionInfo | null) => void,
     ) => {
         try {
-            const result = await backend.connect(connection.id, prompted, remember);
+            const result = await backend.connect(connection.id, prompted, remember, purpose);
             if (result.warning) onErrorRef.current(result.warning);
             resolve(result.session);
         } catch (e) {
@@ -57,7 +61,7 @@ export function useConnectFlow(
                           ? saved?.ssh_password
                           : saved?.ssh_passphrase;
                 const tried = prompted[SECRET_FIELDS[secret]] != null || savedFlag === true;
-                setPrompt({ connection, secret, problem: tried ? message : null, prompted, resolve });
+                setPrompt({ connection, secret, problem: tried ? message : null, prompted, purpose, resolve });
             } else {
                 onErrorRef.current(errorMessage(e));
                 resolve(null);
@@ -65,8 +69,8 @@ export function useConnectFlow(
         }
     };
 
-    const connect = (connection: Connection, prompted: Credentials = {}) =>
-        new Promise<SessionInfo | null>((resolve) => void attempt(connection, prompted, false, resolve));
+    const connect = (connection: Connection, prompted: Credentials = {}, purpose: ConnectPurpose = "tab") =>
+        new Promise<SessionInfo | null>((resolve) => void attempt(connection, prompted, false, purpose, resolve));
 
     const element = prompt && (
         <SecretPrompt
@@ -81,7 +85,7 @@ export function useConnectFlow(
             onSubmit={(value, remember) => {
                 setPrompt(null);
                 const prompted = { ...prompt.prompted, [SECRET_FIELDS[prompt.secret]]: value };
-                void attempt(prompt.connection, prompted, remember, prompt.resolve);
+                void attempt(prompt.connection, prompted, remember, prompt.purpose, prompt.resolve);
             }}
         />
     );

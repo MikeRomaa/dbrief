@@ -4,7 +4,7 @@
 //! with it in `prompted`), anything else is a message to show.
 
 use dbrief_core::actions::{
-    self, ActionError, Connected, OpenedFile, Saved, SavedSecrets, SecretChanges,
+    self, ActionError, ConnectPurpose, Connected, OpenedFile, Saved, SavedSecrets, SecretChanges,
 };
 use dbrief_core::connections::{
     Connection, ConnectionInput, ConnectionTree, DeleteCounts, Folder, ItemRef, Removed,
@@ -138,12 +138,14 @@ pub async fn test_connection(
 #[tauri::command]
 #[specta::specta]
 pub async fn connect(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     id: Uuid,
     prompted: Credentials,
     remember: bool,
+    purpose: ConnectPurpose,
 ) -> Result<Connected> {
-    actions::connect(
+    let connected = actions::connect(
         &state.connections,
         &state.secrets,
         &state.sessions,
@@ -151,18 +153,30 @@ pub async fn connect(
         id,
         &prompted,
         remember,
+        purpose,
     )
-    .await
+    .await?;
+    if connected.background_opened {
+        crate::schema::refresh_later(&app, id);
+    }
+    crate::schema::sessions_changed(&app);
+    Ok(connected)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn disconnect(state: State<'_, AppState>, session_id: Uuid) -> Result<()> {
-    state
+pub async fn disconnect(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    session_id: Uuid,
+) -> Result<()> {
+    let result = state
         .sessions
         .close(session_id)
         .await
-        .map_err(ActionError::failed)
+        .map_err(ActionError::failed);
+    crate::schema::sessions_changed(&app);
+    result
 }
 
 #[tauri::command]

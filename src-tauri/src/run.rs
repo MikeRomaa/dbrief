@@ -2,6 +2,7 @@
 //!
 //! A tab opens its session with the `connect` command and passes the session id here.
 
+use dbrief_core::classify::StatementKind;
 use dbrief_core::session::{
     MoreRows, RunError, RunOutput, SessionError, TransactionMode, TransactionStatement,
 };
@@ -32,6 +33,7 @@ async fn session(
 #[tauri::command]
 #[specta::specta]
 pub async fn run_statement(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     session_id: Uuid,
     sql: String,
@@ -39,7 +41,38 @@ pub async fn run_statement(
 ) -> Result<RunOutput> {
     let session = session(&state, session_id).await?;
     let mut session = session.lock().await;
-    Ok(session.run(&sql, page_size as usize).await?)
+    let output = session.run(&sql, page_size as usize).await?;
+    // Committed DDL changes the schema. Inside a transaction, the background session can't see it
+    // until the commit.
+    if output.kind == StatementKind::Ddl && !output.in_transaction {
+        crate::schema::refresh_later(&app, session.info().connection_id);
+    }
+    Ok(output)
+}
+
+/// Ends the session's transaction, then reloads the schema if the transaction ran DDL (a rollback
+/// too: a user-typed `BEGIN` may have committed part of it already).
+async fn end_transaction(
+    app: &tauri::AppHandle,
+    state: &AppState,
+    session_id: Uuid,
+    commit: bool,
+) -> Result<()> {
+    let session = session(state, session_id).await?;
+    let mut session = session.lock().await;
+    let ran_ddl = session
+        .transaction_statements()
+        .iter()
+        .any(|s| s.kind == StatementKind::Ddl);
+    let result = if commit {
+        session.commit().await
+    } else {
+        session.rollback().await
+    };
+    if ran_ddl {
+        crate::schema::refresh_later(app, session.info().connection_id);
+    }
+    Ok(result?)
 }
 
 /// The next page of the session's open result.
@@ -94,16 +127,22 @@ pub async fn set_transaction_mode(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn commit(state: State<'_, AppState>, session_id: Uuid) -> Result<()> {
-    let session = session(&state, session_id).await?;
-    Ok(session.lock().await.commit().await?)
+pub async fn commit(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    session_id: Uuid,
+) -> Result<()> {
+    end_transaction(&app, &state, session_id, true).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn rollback(state: State<'_, AppState>, session_id: Uuid) -> Result<()> {
-    let session = session(&state, session_id).await?;
-    Ok(session.lock().await.rollback().await?)
+pub async fn rollback(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    session_id: Uuid,
+) -> Result<()> {
+    end_transaction(&app, &state, session_id, false).await
 }
 
 /// Reconnects after the user acknowledged that an open transaction was lost.

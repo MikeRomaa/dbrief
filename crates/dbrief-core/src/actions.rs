@@ -113,11 +113,24 @@ pub struct Saved {
 }
 
 /// An opened session. `warning` is set when the prompted secrets couldn't be remembered.
+/// `background_opened` is true when the connection's background session was opened by this call,
+/// so its schema should be loaded.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Connected {
     pub session: SessionInfo,
     pub warning: Option<String>,
+    pub background_opened: bool,
+}
+
+/// What a connect is for: a tab's own session (which also connects the background session), or just
+/// the connection's background session (Connections view, Explorer, search).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "kebab-case")]
+pub enum ConnectPurpose {
+    Tab,
+    Background,
 }
 
 /// Whether the connection uses this kind of secret at all.
@@ -269,6 +282,7 @@ pub async fn test_connection(
 
 /// Opens a session for a saved connection. Prompted secrets that worked are saved when `remember`
 /// is set, and always kept for this app session when there is no credential store.
+#[allow(clippy::too_many_arguments)]
 pub async fn connect(
     repo: &ConnectionRepo,
     secrets: &Secrets,
@@ -277,18 +291,37 @@ pub async fn connect(
     id: Uuid,
     prompted: &Credentials,
     remember: bool,
+    purpose: ConnectPurpose,
 ) -> Result<Connected, ActionError> {
     let connection = repo.connection(id).await?;
     let input = &connection.input;
     let credentials = credentials(secrets, Some(id), prompted);
     let target = ConnectTarget::new(id, input, &credentials, ssh_env)
         .map_err(|e| session_error(e, input))?;
-    let session = sessions
-        .open(target)
-        .await
-        .map_err(|e| session_error(e, input))?;
 
     let mut warnings = Vec::new();
+    let (session, background_opened) = match purpose {
+        ConnectPurpose::Background => sessions
+            .open_background(target)
+            .await
+            .map_err(|e| session_error(e, input))?,
+        ConnectPurpose::Tab => {
+            let session = sessions
+                .open(target.clone())
+                .await
+                .map_err(|e| session_error(e, input))?;
+            // The same settings just worked, so the background session normally opens too.
+            let opened = match sessions.open_background(target).await {
+                Ok((_, opened)) => opened,
+                Err(e) => {
+                    warnings.push(format!("could not open the background session: {e}"));
+                    false
+                }
+            };
+            (session, opened)
+        }
+    };
+
     if let Err(e) = repo.record_connected(id, &session.server_version).await {
         warnings.push(format!("could not record the connection as used: {e}"));
     }
@@ -299,6 +332,7 @@ pub async fn connect(
     Ok(Connected {
         session,
         warning: (!warnings.is_empty()).then(|| warnings.join("; ")),
+        background_opened,
     })
 }
 
@@ -640,15 +674,36 @@ mod tests {
             id,
             &Credentials::default(),
             false,
+            ConnectPurpose::Tab,
         )
         .await
         .unwrap();
         assert_eq!(connected.warning, None);
         assert_eq!(connected.session.connection_id, id);
+        assert!(!connected.session.background);
+        assert!(connected.background_opened);
         let used = repo.connection(id).await.unwrap();
         assert!(used.last_used_at.is_some());
         assert!(used.server_version.unwrap().starts_with("SQLite 3."));
-        assert_eq!(sessions.list().await.len(), 1);
+        // The tab's session and the connection's background session.
+        assert_eq!(sessions.list().await.len(), 2);
+
+        // Connecting the background session again reuses it.
+        let background = connect(
+            &repo,
+            &secrets,
+            &sessions,
+            &env,
+            id,
+            &Credentials::default(),
+            false,
+            ConnectPurpose::Background,
+        )
+        .await
+        .unwrap();
+        assert!(background.session.background);
+        assert!(!background.background_opened);
+        assert_eq!(sessions.list().await.len(), 2);
 
         let removed = remove_item(&repo, &secrets, &sessions, ItemRef::Connection(id))
             .await
@@ -665,6 +720,7 @@ mod tests {
             id,
             &Credentials::default(),
             false,
+            ConnectPurpose::Background,
         )
         .await;
         assert!(matches!(missing, Err(ActionError::Failed { .. })));

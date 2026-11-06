@@ -1,21 +1,30 @@
-import { FileCode, NotebookPen, X } from "lucide-react";
+import { Eye, FileCode, NotebookPen, Table2, X } from "lucide-react";
 import { type Dispatch, useCallback, useEffect, useRef, useState } from "react";
 
 import type { ConnectionsState } from "@/hooks/useConnections";
 import { backend, errorMessage, type Settings } from "@/lib/backend";
+import { setDisconnectGuard } from "@/lib/disconnect";
 import { log } from "@/lib/log";
 import { handleRovingKeyDown } from "@/lib/roving";
 import type { Store } from "@/lib/store";
+import { displayName, parseTableKey } from "@/lib/tableTabs";
 import type { TabsAction, TabsState } from "@/lib/tabs";
 import { ScriptTab, type TabRuntime } from "@/scripts/ScriptTab";
-import { isScratchpad, tabTitle } from "@/scripts/scratchpad";
+import { isScratchpad, tabTitle as scriptTitle } from "@/scripts/scratchpad";
+import { TableTab } from "@/tables/TableTab";
 import { Dialog } from "@/ui/Dialog";
 
 import styles from "@/scripts/ScriptsWorkspace.module.css";
 import controls from "@/ui/controls.module.css";
 
+/** A tab's name: the script's file name, or the table's name. */
+function tabTitle(key: string): string {
+    const table = parseTableKey(key);
+    return table ? table.name : scriptTitle(key);
+}
+
 /**
- * The editor area's tabs. Every open tab stays mounted, so editors, results and sessions survive
+ * The editor area's tabs: scripts and tables. Every open tab stays mounted, so editors, results and sessions survive
  * switching. `changes` carries paths changed on disk, so open tabs can reload them.
  */
 interface ScriptsWorkspaceProps {
@@ -31,6 +40,42 @@ export function ScriptsWorkspace({ tabs, dispatch, connections, settings, change
     const runtimes = useRef(new Map<string, TabRuntime>());
     const [closing, setClosing] = useState<{ path: string; runtime: TabRuntime } | null>(null);
     const [problem, setProblem] = useState<string | null>(null);
+    const [disconnecting, setDisconnecting] = useState<{
+        paths: string[];
+        resolve: (ok: boolean) => void;
+    } | null>(null);
+
+    // Disconnecting a connection asks about tabs with uncommitted work on it.
+    useEffect(
+        () =>
+            setDisconnectGuard(async (connectionId) => {
+                const open = [...runtimes.current.entries()]
+                    .filter(([, r]) => r.connectionId === connectionId && r.inTransaction && r.sessionId)
+                    .map(([path]) => path);
+                if (open.length === 0) return true;
+                return new Promise<boolean>((resolve) => setDisconnecting({ paths: open, resolve }));
+            }),
+        [],
+    );
+
+    const endAll = async (how: "commit" | "rollback" | "cancel") => {
+        if (!disconnecting) return;
+        const { paths, resolve } = disconnecting;
+        setDisconnecting(null);
+        if (how === "cancel") return resolve(false);
+        try {
+            for (const path of paths) {
+                const sessionId = runtimes.current.get(path)?.sessionId;
+                if (!sessionId) continue;
+                await (how === "commit" ? backend.commit(sessionId) : backend.rollback(sessionId));
+                log({ kind: "transaction", source: tabTitle(path), text: how === "commit" ? "COMMIT" : "ROLLBACK" });
+            }
+            resolve(true);
+        } catch (e) {
+            setProblem(errorMessage(e));
+            resolve(false);
+        }
+    };
 
     // One stable callback per path, so tabs don't re-report on every render.
     const reporters = useRef(new Map<string, (runtime: TabRuntime) => void>());
@@ -100,7 +145,7 @@ export function ScriptsWorkspace({ tabs, dispatch, connections, settings, change
         return (
             <div className={styles.empty} hidden={hidden}>
                 <p>No open tabs</p>
-                <p className={styles.hint}>Open a script from the Scripts panel.</p>
+                <p className={styles.hint}>Open a script from the Scripts panel, or a table from the Explorer.</p>
             </div>
         );
     }
@@ -109,7 +154,7 @@ export function ScriptsWorkspace({ tabs, dispatch, connections, settings, change
         <div className={styles.workspace} hidden={hidden}>
             <div
                 role="tablist"
-                aria-label="Open scripts"
+                aria-label="Open tabs"
                 className={styles.strip}
                 onKeyDown={(e) => {
                     const el = handleRovingKeyDown(e, '[role="tab"]', "horizontal");
@@ -118,6 +163,20 @@ export function ScriptsWorkspace({ tabs, dispatch, connections, settings, change
             >
                 {tabs.tabs.map((tab) => {
                     const selected = tab.path === tabs.active;
+                    const table = parseTableKey(tab.path);
+                    const connection = table ? connections.index.connections.get(table.connectionId) : undefined;
+                    const title = table
+                        ? `${connection?.name ?? "Removed connection"} · ${table.schema}.${table.name}`
+                        : isScratchpad(tab.path)
+                          ? "Scratchpad (kept in DBrief, not a file)"
+                          : tab.path;
+                    const Icon = table
+                        ? table.kind === "table"
+                            ? Table2
+                            : Eye
+                        : isScratchpad(tab.path)
+                          ? NotebookPen
+                          : FileCode;
                     return (
                         <div key={tab.path} className={styles.tab} data-selected={selected || undefined}>
                             <button
@@ -128,13 +187,15 @@ export function ScriptsWorkspace({ tabs, dispatch, connections, settings, change
                                 tabIndex={selected ? 0 : -1}
                                 className={styles.tabButton}
                                 data-preview={tab.preview || undefined}
-                                title={isScratchpad(tab.path) ? "Scratchpad (kept in DBrief, not a file)" : tab.path}
+                                title={title}
                                 onClick={() => dispatch({ type: "activate", path: tab.path })}
                                 onDoubleClick={() => dispatch({ type: "pin", path: tab.path })}
                                 onAuxClick={(e) => e.button === 1 && close(tab.path)}
                             >
-                                {isScratchpad(tab.path) ? <NotebookPen size={13} /> : <FileCode size={13} />}
-                                <span className={styles.tabName}>{tabTitle(tab.path)}</span>
+                                <Icon size={13} />
+                                <span className={styles.tabName}>
+                                    {table ? displayName(table.schema, table.name) : tabTitle(tab.path)}
+                                </span>
                             </button>
                             <button
                                 type="button"
@@ -156,17 +217,47 @@ export function ScriptsWorkspace({ tabs, dispatch, connections, settings, change
                 </p>
             )}
 
-            {tabs.tabs.map((tab) => (
-                <ScriptTab
-                    key={tab.path}
-                    path={tab.path}
-                    active={tab.path === tabs.active}
-                    connections={connections}
-                    settings={settings}
-                    onEdited={() => tab.preview && dispatch({ type: "pin", path: tab.path })}
-                    onRuntime={reporterFor(tab.path)}
-                />
-            ))}
+            {tabs.tabs.map((tab) => {
+                const table = parseTableKey(tab.path);
+                const props = {
+                    active: tab.path === tabs.active,
+                    connections,
+                    settings,
+                    onEdited: () => tab.preview && dispatch({ type: "pin", path: tab.path }),
+                    onRuntime: reporterFor(tab.path),
+                };
+                return table ? (
+                    <TableTab key={tab.path} table={table} {...props} />
+                ) : (
+                    <ScriptTab key={tab.path} path={tab.path} {...props} />
+                );
+            })}
+
+            {disconnecting && (
+                <Dialog
+                    title="Disconnect with uncommitted changes?"
+                    onClose={() => void endAll("cancel")}
+                    footer={
+                        <>
+                            <button type="button" className={controls.button} onClick={() => void endAll("cancel")}>
+                                Cancel
+                            </button>
+                            <button type="button" className={controls.button} onClick={() => void endAll("rollback")}>
+                                Roll back
+                            </button>
+                            <button type="button" className={controls.primary} onClick={() => void endAll("commit")}>
+                                Commit
+                            </button>
+                        </>
+                    }
+                >
+                    <p className={styles.hint}>
+                        {disconnecting.paths.map(tabTitle).join(", ")}{" "}
+                        {disconnecting.paths.length === 1 ? "has a transaction" : "have transactions"} with changes that
+                        aren't committed yet.
+                    </p>
+                </Dialog>
+            )}
 
             {closing && (
                 <Dialog

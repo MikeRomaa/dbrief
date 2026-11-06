@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { useCloseOnScroll, usePopoverPosition } from "@/hooks/usePopover";
 import { handleRovingKeyDown } from "@/lib/roving";
@@ -74,10 +74,43 @@ export function MenuButton({ label, entries, align = "start", className, childre
 
 interface MenuProps {
     label: string;
-    anchor: HTMLElement;
+    anchor: Pick<HTMLElement, "getBoundingClientRect">;
     align: "start" | "end";
     entries: MenuEntry[];
     onClose: (refocus: boolean) => void;
+}
+
+/**
+ * A context menu at a point (right-click, or the Menu key / Shift+F10 at the focused item). Focus
+ * returns to `returnFocus` when it closes with Escape.
+ */
+export function ContextMenu({
+    label,
+    at,
+    entries,
+    onClose,
+    returnFocus,
+}: {
+    label: string;
+    at: { x: number; y: number };
+    entries: MenuEntry[];
+    onClose: () => void;
+    returnFocus?: HTMLElement | null;
+}) {
+    // Stable per point: the popup measures again whenever its anchor changes.
+    const anchor = useMemo(() => ({ getBoundingClientRect: () => new DOMRect(at.x, at.y, 0, 0) }), [at.x, at.y]);
+    return (
+        <Menu
+            label={label}
+            anchor={anchor}
+            align="start"
+            entries={entries}
+            onClose={(refocus) => {
+                onClose();
+                if (refocus) returnFocus?.focus();
+            }}
+        />
+    );
 }
 
 function Menu({ label, anchor, align, entries, onClose }: MenuProps) {

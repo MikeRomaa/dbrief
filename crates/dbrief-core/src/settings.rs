@@ -16,6 +16,8 @@ const DEFAULT_FILE: &str = r#"# dbrief settings.
 [appearance]
 # Color theme: "light", "dark", or "system" (follows the OS setting).
 theme = "system"
+# Tint the top and status bars with the active connection's color tag.
+tint_bars = true
 
 [editor]
 # Folder where SQL scripts are saved as .sql files. Chosen on first launch.
@@ -30,8 +32,12 @@ autocomplete = true
 format_on_save = false
 
 [data_grid]
-# Rows fetched at a time; "Load more" fetches the next page.
+# Rows fetched at a time: "Load more" in script results, one page in the table grid.
 page_size = 200
+# How NULL shows in the grid: "null" (NULL), "symbol" (∅) or "blank" (empty, shaded).
+null_display = "null"
+# Characters of a JSON value shown in a grid cell; the inspector shows all of it.
+json_truncation = 100
 "#;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,11 +50,32 @@ pub enum Theme {
     System,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(default)]
 pub struct Appearance {
     pub theme: Theme,
+    pub tint_bars: bool,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            theme: Theme::default(),
+            tint_bars: true,
+        }
+    }
+}
+
+/// How NULL shows in the data grid.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "lowercase")]
+pub enum NullDisplay {
+    #[default]
+    Null,
+    Symbol,
+    Blank,
 }
 
 /// Editor settings. `scripts_folder` is an absolute path, empty until chosen on first launch.
@@ -80,11 +107,17 @@ impl Default for Editor {
 #[serde(default)]
 pub struct DataGrid {
     pub page_size: u32,
+    pub null_display: NullDisplay,
+    pub json_truncation: u32,
 }
 
 impl Default for DataGrid {
     fn default() -> Self {
-        Self { page_size: 200 }
+        Self {
+            page_size: 200,
+            null_display: NullDisplay::default(),
+            json_truncation: 100,
+        }
     }
 }
 
@@ -345,7 +378,10 @@ mod tests {
 
     fn dark() -> Settings {
         Settings {
-            appearance: Appearance { theme: Theme::Dark },
+            appearance: Appearance {
+                theme: Theme::Dark,
+                ..Appearance::default()
+            },
             ..Settings::default()
         }
     }

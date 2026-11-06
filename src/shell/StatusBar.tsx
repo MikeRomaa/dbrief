@@ -1,16 +1,29 @@
 import { PanelBottom, PanelLeft, PanelRight, TriangleAlert } from "lucide-react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
+import type { AccessLevel } from "@/lib/bindings";
+import { ACCESS_LABELS } from "@/lib/connectionFormat";
 import type { LayoutState } from "@/lib/layout";
 import { type CommandMeta, commandHints, SHELL_COMMANDS, useCommands } from "@/shell/shellCommands";
 import { tooltip } from "@/shell/TooltipLayer";
 
 import styles from "@/shell/StatusBar.module.css";
+import controls from "@/ui/controls.module.css";
+
+/** The active connection as the status bar shows it. */
+export interface StatusConnection {
+    name: string;
+    accessLevel: AccessLevel;
+    serverVersion: string | null;
+    connected: boolean;
+}
 
 interface StatusBarProps {
     layout: LayoutState;
     warnings: string[];
     summary?: string[];
+    connection?: StatusConnection | null;
+    tint?: string;
 }
 
 function PanelToggle({
@@ -43,9 +56,13 @@ function PanelToggle({
 }
 
 /** Status bar. Panel toggles sit at the edge nearest the panel they control. */
-export function StatusBar({ layout, warnings, summary }: StatusBarProps) {
+export function StatusBar({ layout, warnings, summary, connection, tint }: StatusBarProps) {
     return (
-        <footer className={styles.statusBar}>
+        <footer
+            className={styles.statusBar}
+            data-tinted={tint ? true : undefined}
+            style={tint ? ({ "--bar-tint": tint } as CSSProperties) : undefined}
+        >
             <PanelToggle
                 meta={SHELL_COMMANDS.toggleSidePanel}
                 label="Side panel"
@@ -60,6 +77,19 @@ export function StatusBar({ layout, warnings, summary }: StatusBarProps) {
                         {item}
                     </span>
                 ))
+            ) : connection ? (
+                <span className={styles.connection}>
+                    <span
+                        role="img"
+                        className={connection.connected ? styles.connected : styles.disconnected}
+                        aria-label={connection.connected ? "Connected" : "Not connected"}
+                    />
+                    <span className={styles.item}>{connection.name}</span>
+                    <span className={controls.badge} data-level={connection.accessLevel}>
+                        {ACCESS_LABELS[connection.accessLevel]}
+                    </span>
+                    {connection.serverVersion && <span className={styles.item}>{connection.serverVersion}</span>}
+                </span>
             ) : (
                 <span className={styles.item}>No connection</span>
             )}
