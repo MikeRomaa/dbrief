@@ -5,6 +5,7 @@
     overflow: auto;
     padding: 32px 16px;
     background: var(--color-bg);
+    -webkit-user-select: text;
     user-select: text;
 }
 

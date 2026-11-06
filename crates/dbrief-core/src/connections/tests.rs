@@ -219,7 +219,7 @@ async fn pin_and_last_used() {
 
     let a = repo.create_connection(sqlite("a", None)).await.unwrap();
     repo.set_pinned(a.id, true).await.unwrap();
-    repo.touch_last_used(a.id).await.unwrap();
+    repo.record_connected(a.id, "SQLite 3.46.0").await.unwrap();
 
     let tree = repo.tree().await.unwrap();
     assert_eq!(tree.pinned.len(), 1);

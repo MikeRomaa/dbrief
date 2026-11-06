@@ -26,3 +26,8 @@
     min-width: 320px;
     min-height: 0;
 }
+
+/* Kept mounted while the Connections view covers it, so its state survives switching views. */
+.center[hidden] {
+    display: none;
+}

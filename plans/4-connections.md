@@ -75,6 +75,7 @@ connections
   confirm_before_commit  bool
   manual_transactions    bool  -- default: false for RO, true for RW/DDL
   created_at, last_used_at
+  server_version   text  null  -- from the last connect, for the Engine column (migration 0003)
 ```
 
 Later tables (history, diagrams, schema cache) reference `connections(id) on delete cascade`, so removing a connection cleans them up automatically.

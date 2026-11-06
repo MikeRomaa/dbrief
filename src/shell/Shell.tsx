@@ -2,11 +2,14 @@ import { platform } from "@tauri-apps/plugin-os";
 import { LucideProvider } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ConnectionsView } from "@/connections/ConnectionsView";
+import { useConnections } from "@/connections/useConnections";
 import { useFirstLaunch } from "@/hooks/useFirstLaunch";
 import { useLayout } from "@/hooks/useLayout";
 import { useSettings } from "@/hooks/useSettings";
 import { useWindowHeight, useWindowWidth } from "@/hooks/useWindowSize";
 import { createCommandRegistry } from "@/lib/commands";
+import { plural } from "@/lib/connectionFormat";
 import {
     bottomPanelRenderedHeight,
     maxBottomPanelHeight,
@@ -33,6 +36,7 @@ export function Shell() {
     const { layout, dispatch, loaded, saveError } = useLayout();
     const { settings, warning, setTheme, setScriptsFolder } = useSettings();
     const firstLaunch = useFirstLaunch();
+    const connections = useConnections();
     const [registry] = useState(() => createCommandRegistry(platform()));
     const [searchOpen, setSearchOpen] = useState(false);
     const windowWidth = useWindowWidth();
@@ -101,6 +105,8 @@ export function Shell() {
         );
     }
 
+    // Connections is a full view: it takes the place of the side panel, editor and inspector.
+    const connectionsView = layout.activeRailItem === "connections";
     const sideWidth = sidePanelRenderedWidth(layout, windowWidth);
     const bottomHeight = bottomPanelRenderedHeight(layout, windowHeight);
     const warnings = [warning, saveError].filter((w): w is string => !!w);
@@ -113,7 +119,8 @@ export function Shell() {
                     <TopBar />
                     <div className={styles.main}>
                         <ActivityRail layout={layout} />
-                        {layout.sidePanelVisible && (
+                        {connectionsView && <ConnectionsView state={connections} />}
+                        {!connectionsView && layout.sidePanelVisible && (
                             <>
                                 <SidePanel item={layout.activeRailItem} width={sideWidth} />
                                 <Splitter
@@ -129,7 +136,7 @@ export function Shell() {
                                 />
                             </>
                         )}
-                        <div className={styles.center}>
+                        <div className={styles.center} hidden={connectionsView}>
                             <EditorArea>
                                 {layout.activeRailItem === "settings" ? (
                                     <SettingsView
@@ -155,9 +162,23 @@ export function Shell() {
                             {/* The 1px splitter line is part of the bottom panel's height. */}
                             <BottomPanel layout={layout} height={bottomHeight - 1} />
                         </div>
-                        {layout.inspectorVisible && <Inspector />}
+                        {!connectionsView && layout.inspectorVisible && <Inspector />}
                     </div>
-                    <StatusBar layout={layout} warnings={warnings} />
+                    <StatusBar
+                        layout={layout}
+                        warnings={warnings}
+                        summary={
+                            connectionsView
+                                ? [
+                                      plural(connections.sessions.length, "open session"),
+                                      `${plural(connections.index.connections.size, "connection")} in ${plural(connections.index.folders.size, "folder")}`,
+                                      connections.persistentSecrets
+                                          ? "Passwords in system keychain"
+                                          : "Passwords kept until quit",
+                                  ]
+                                : undefined
+                        }
+                    />
                     {searchOpen && <SearchPopover onClose={() => setSearchOpen(false)} />}
                     <TooltipLayer />
                 </div>

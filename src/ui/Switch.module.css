@@ -1,0 +1,45 @@
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 2px 0;
+    border: 0;
+    background: transparent;
+    font-size: var(--font-size-sm);
+    text-align: left;
+}
+
+.row:disabled {
+    opacity: 0.4;
+}
+
+/* Square switch: outlined with a small mark when off, filled when on. */
+.track {
+    display: flex;
+    align-items: center;
+    flex: none;
+    width: 28px;
+    height: 16px;
+    padding: 3px;
+    border: 1px solid var(--color-text);
+}
+
+.thumb {
+    width: 8px;
+    height: 8px;
+    background: var(--color-text);
+}
+
+.track[data-on] {
+    justify-content: flex-end;
+    padding: 2px;
+    background: var(--color-text);
+}
+
+.track[data-on] .thumb {
+    width: 10px;
+    height: 10px;
+    background: var(--color-bg);
+}

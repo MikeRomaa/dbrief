@@ -10,6 +10,7 @@ import styles from "@/shell/StatusBar.module.css";
 interface StatusBarProps {
     layout: LayoutState;
     warnings: string[];
+    summary?: string[];
 }
 
 function PanelToggle({
@@ -42,7 +43,7 @@ function PanelToggle({
 }
 
 /** Status bar. Panel toggles sit at the edge nearest the panel they control. */
-export function StatusBar({ layout, warnings }: StatusBarProps) {
+export function StatusBar({ layout, warnings, summary }: StatusBarProps) {
     return (
         <footer className={styles.statusBar}>
             <PanelToggle
@@ -53,7 +54,15 @@ export function StatusBar({ layout, warnings }: StatusBarProps) {
             >
                 <PanelLeft size={14} />
             </PanelToggle>
-            <span className={styles.item}>No connection</span>
+            {summary ? (
+                summary.map((item) => (
+                    <span key={item} className={styles.item}>
+                        {item}
+                    </span>
+                ))
+            ) : (
+                <span className={styles.item}>No connection</span>
+            )}
             <span className={styles.spacer} />
             <span role="status" className={styles.status}>
                 {warnings.map((w) => (

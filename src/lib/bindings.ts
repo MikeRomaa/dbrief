@@ -48,6 +48,8 @@ export const commands = {
 	parseConnectionUrl: (text: string) => typedError<UrlParts_Serialize, ActionError>(__TAURI_INVOKE("parse_connection_url", { text })),
 	/**  The copyable URL for the modal's settings, without the password. */
 	buildConnectionUrl: (input: ConnectionInput_Deserialize) => __TAURI_INVOKE<string>("build_connection_url", { input }),
+	/**  The connection for a SQLite file: reused when one exists for the same path, else created at the root. */
+	openSqliteFile: (path: string) => typedError<OpenedFile_Serialize, ActionError>(__TAURI_INVOKE("open_sqlite_file", { path })),
 };
 
 /* Types */
@@ -166,6 +168,8 @@ export type Connection_Deserialize = {
 	sort_order: number | null,
 	created_at: string,
 	last_used_at?: string | null,
+	/**  From the last successful connect, e.g. "PostgreSQL 17.2". `None` until first connected. */
+	server_version?: string | null,
 } & ConnectionInput_Deserialize;
 
 /**  A saved connection. Timestamps are ISO 8601 UTC strings. */
@@ -175,6 +179,8 @@ export type Connection_Serialize = {
 	sort_order: number | null,
 	created_at: string,
 	last_used_at: string | null,
+	/**  From the last successful connect, e.g. "PostgreSQL 17.2". `None` until first connected. */
+	server_version: string | null,
 } & ConnectionInput_Serialize;
 
 /**  Secrets for connecting, from the credential store or a prompt. Never part of the connection. */
@@ -252,6 +258,30 @@ export type Folder_Serialize = {
 
 /**  A folder or a connection, e.g. the item being moved or deleted. */
 export type ItemRef = { kind: "folder"; id: string } | { kind: "connection"; id: string };
+
+/**
+ *  The connection for a SQLite file: an existing one with the same canonical path, or a new RW
+ *  connection at the root named after the file. `created` tells which.
+ */
+export type OpenedFile = OpenedFile_Serialize | OpenedFile_Deserialize;
+
+/**
+ *  The connection for a SQLite file: an existing one with the same canonical path, or a new RW
+ *  connection at the root named after the file. `created` tells which.
+ */
+export type OpenedFile_Deserialize = {
+	connection: Connection_Deserialize,
+	created: boolean,
+};
+
+/**
+ *  The connection for a SQLite file: an existing one with the same canonical path, or a new RW
+ *  connection at the root named after the file. `created` tells which.
+ */
+export type OpenedFile_Serialize = {
+	connection: Connection_Serialize,
+	created: boolean,
+};
 
 /**
  *  What [`remove`] deleted. `secret_errors` lists credential store failures; the rows are deleted

@@ -49,6 +49,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         connections::list_sessions,
         connections::parse_connection_url,
         connections::build_connection_url,
+        connections::open_sqlite_file,
     ])
 }
 

@@ -5,13 +5,14 @@
 //! with the answer in `prompted`.
 
 use std::fmt;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::connections::{
-    self, Connection, ConnectionInput, ConnectionRepo, ConnectionsError, Engine, ItemRef, Removed,
-    SshAuth,
+    self, AccessLevel, Connection, ConnectionInput, ConnectionRepo, ConnectionsError, Engine,
+    ItemRef, Removed, SshAuth,
 };
 use crate::secrets::{SecretKind, Secrets, SecretsError};
 use crate::session::{
@@ -288,7 +289,7 @@ pub async fn connect(
         .map_err(|e| session_error(e, input))?;
 
     let mut warnings = Vec::new();
-    if let Err(e) = repo.touch_last_used(id).await {
+    if let Err(e) = repo.record_connected(id, &session.server_version).await {
         warnings.push(format!("could not record the connection as used: {e}"));
     }
     if let Err(e) = remember_prompted(secrets, id, input, prompted, remember) {
@@ -326,6 +327,54 @@ fn remember_prompted(
     }
 
     Ok(())
+}
+
+/// File extensions offered for SQLite files and registered for "Open with".
+pub const SQLITE_EXTENSIONS: [&str; 5] = ["db", "sqlite", "sqlite3", "db3", "s3db"];
+
+/// The connection for a SQLite file: an existing one with the same canonical path, or a new RW
+/// connection at the root named after the file. `created` tells which.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct OpenedFile {
+    pub connection: Connection,
+    pub created: bool,
+}
+
+pub async fn open_sqlite_file(
+    repo: &ConnectionRepo,
+    path: &Path,
+) -> Result<OpenedFile, ActionError> {
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|e| ActionError::failed(format!("could not open {}: {e}", path.display())))?;
+    if !canonical.is_file() {
+        return Err(ActionError::failed(format!(
+            "{} is not a file",
+            canonical.display()
+        )));
+    }
+    let canonical_text = canonical.display().to_string();
+
+    let existing = repo.connections().await?.into_iter().find(|c| {
+        c.input.engine == Engine::Sqlite && c.input.file_path.as_deref() == Some(&canonical_text)
+    });
+    if let Some(connection) = existing {
+        return Ok(OpenedFile {
+            connection,
+            created: false,
+        });
+    }
+
+    let name = canonical.file_name().map_or_else(
+        || canonical_text.clone(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    let mut input = ConnectionInput::new(name, Engine::Sqlite, AccessLevel::Rw);
+    input.file_path = Some(canonical_text);
+    Ok(OpenedFile {
+        connection: repo.create_connection(input).await?,
+        created: true,
+    })
 }
 
 /// Removes a folder or connection with its secrets, closing the sessions of every removed connection.
@@ -371,7 +420,7 @@ mod tests {
 
     use super::*;
     use crate::Storage;
-    use crate::connections::{AccessLevel, SshTunnel};
+    use crate::connections::SshTunnel;
     use crate::secrets::MemoryStore;
 
     async fn repo() -> (tempfile::TempDir, ConnectionRepo) {
@@ -596,7 +645,9 @@ mod tests {
         .unwrap();
         assert_eq!(connected.warning, None);
         assert_eq!(connected.session.connection_id, id);
-        assert!(repo.connection(id).await.unwrap().last_used_at.is_some());
+        let used = repo.connection(id).await.unwrap();
+        assert!(used.last_used_at.is_some());
+        assert!(used.server_version.unwrap().starts_with("SQLite 3."));
         assert_eq!(sessions.list().await.len(), 1);
 
         let removed = remove_item(&repo, &secrets, &sessions, ItemRef::Connection(id))
@@ -617,5 +668,32 @@ mod tests {
         )
         .await;
         assert!(matches!(missing, Err(ActionError::Failed { .. })));
+    }
+
+    #[tokio::test]
+    async fn opening_a_sqlite_file_reuses_its_connection() {
+        let (dir, repo) = repo().await;
+        let file = dir.path().join("shop.sqlite3");
+        std::fs::File::create(&file).unwrap();
+
+        let first = open_sqlite_file(&repo, &file).await.unwrap();
+        assert!(first.created);
+        assert_eq!(first.connection.input.name, "shop.sqlite3");
+        assert_eq!(first.connection.input.access_level, AccessLevel::Rw);
+        assert_eq!(first.connection.input.folder_id, None);
+
+        // A different spelling of the same path finds the same connection.
+        let again = open_sqlite_file(&repo, &dir.path().join(".").join("shop.sqlite3"))
+            .await
+            .unwrap();
+        assert!(!again.created);
+        assert_eq!(again.connection.id, first.connection.id);
+
+        assert!(
+            open_sqlite_file(&repo, &dir.path().join("missing.db"))
+                .await
+                .is_err()
+        );
+        assert!(open_sqlite_file(&repo, dir.path()).await.is_err());
     }
 }

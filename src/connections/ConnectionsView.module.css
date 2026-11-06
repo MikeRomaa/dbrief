@@ -1,0 +1,689 @@
+/* Connections view: header, pinned cards, the "All connections" tree table, and the inspector. */
+
+.view {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    background: var(--color-bg);
+}
+
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.header {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 52px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.titleCount {
+    margin-left: 4px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.spacer {
+    flex: 1;
+}
+
+.filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 260px;
+    height: 24px;
+    padding: 0 4px 0 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+}
+
+.filter:focus-within {
+    outline: 2px solid var(--color-changed);
+    outline-offset: -2px;
+}
+
+.filter input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+}
+
+.filter input::placeholder {
+    color: var(--color-text-faint);
+}
+
+.filter input::-webkit-search-cancel-button {
+    display: none;
+}
+
+.banner {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 20px 0;
+    padding: 4px 4px 4px 10px;
+    background: var(--color-error-bg);
+    color: var(--color-error);
+    font-size: var(--font-size-sm);
+}
+
+.bannerText {
+    flex: 1;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.banner button {
+    color: inherit;
+}
+
+.body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-height: 0;
+    overflow: auto;
+    padding: 16px 20px;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.grow {
+    flex: 1;
+    min-height: 0;
+}
+
+.sectionHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 24px;
+}
+
+.sectionHeader h2 {
+    margin: 0;
+}
+
+/* Pinned cards */
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cardItem {
+    min-width: 0;
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+}
+
+.card:hover {
+    background: var(--color-hover);
+}
+
+.card[data-selected] {
+    border-color: var(--color-text);
+    box-shadow: inset 0 0 0 1px var(--color-text);
+}
+
+.card:focus-visible {
+    outline-offset: 1px;
+}
+
+.cardTitle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 22px;
+}
+
+.cardName {
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cardPath {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cardMeta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.cardHost {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The tree table */
+
+.table {
+    position: relative;
+}
+
+.grid {
+    width: 100%;
+    table-layout: fixed;
+    border: 1px solid var(--color-border);
+    border-spacing: 0;
+    overflow: hidden;
+}
+
+.colGrip {
+    width: 24px;
+}
+
+.colEngine {
+    width: 124px;
+}
+
+.colHost {
+    width: 220px;
+}
+
+.colAccess {
+    width: 60px;
+}
+
+.colUsed {
+    width: 96px;
+}
+
+.colActions {
+    width: 60px;
+}
+
+.grid th {
+    height: 26px;
+    padding: 0;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+    font-size: var(--font-size-xs);
+    font-weight: 400;
+    color: var(--color-text-muted);
+    text-align: left;
+}
+
+.grid th:nth-child(2) {
+    padding-left: 4px;
+}
+
+.grid td {
+    height: 28px;
+    padding: 0;
+    border-bottom: 1px solid var(--color-border);
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.row:last-child td {
+    border-bottom: 0;
+}
+
+.row:hover td {
+    background: var(--color-hover);
+}
+
+.row[data-selected] td {
+    background: var(--color-selected);
+}
+
+/* WebKit doesn't draw outlines on table rows, so the focus ring is drawn on the cells. */
+.row:focus-visible {
+    outline: none;
+}
+
+.row:focus-visible td {
+    box-shadow:
+        inset 0 2px var(--color-changed),
+        inset 0 -2px var(--color-changed);
+}
+
+.row:focus-visible td:first-child {
+    box-shadow:
+        inset 2px 0 var(--color-changed),
+        inset 0 2px var(--color-changed),
+        inset 0 -2px var(--color-changed);
+}
+
+.row:focus-visible td:last-child {
+    box-shadow:
+        inset -2px 0 var(--color-changed),
+        inset 0 2px var(--color-changed),
+        inset 0 -2px var(--color-changed);
+}
+
+.row[data-dragged] {
+    opacity: 0.35;
+}
+
+.row[data-drop-into] td {
+    background: var(--color-changed-bg);
+    box-shadow:
+        inset 0 1px var(--color-changed),
+        inset 0 -1px var(--color-changed);
+}
+
+.grip {
+    color: var(--color-text-faint);
+    text-align: center;
+    cursor: grab;
+}
+
+.grip svg {
+    visibility: hidden;
+    vertical-align: middle;
+}
+
+.row:hover .grip svg,
+.row[data-selected] .grip svg {
+    visibility: visible;
+}
+
+.nameCell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.chevron {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 12px;
+    height: 16px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+}
+
+.chevronSpace {
+    flex: none;
+    width: 12px;
+}
+
+.muted {
+    display: flex;
+    color: var(--color-text-muted);
+}
+
+.folderName {
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+}
+
+.folderName[data-top] {
+    font-weight: 600;
+}
+
+.connectionName {
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    text-overflow: ellipsis;
+}
+
+.row[data-selected] .connectionName {
+    font-weight: 600;
+}
+
+.grid .engineCell {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    text-overflow: ellipsis;
+}
+
+.grid .monoCell {
+    padding-right: 12px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    text-overflow: ellipsis;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 2px;
+    padding-right: 6px;
+}
+
+/* Row buttons show on hover, selection or focus; a pinned pin always shows. */
+.actions button {
+    visibility: hidden;
+}
+
+.row:hover .actions button,
+.row[data-selected] .actions button,
+.row:focus-within .actions button,
+.actions button[aria-expanded="true"],
+.actions button[data-pinned] {
+    visibility: visible;
+}
+
+.actions button[data-pinned] {
+    color: var(--color-text);
+}
+
+.dropLine {
+    position: absolute;
+    right: 0;
+    z-index: 3;
+    height: 2px;
+    margin-top: -1px;
+    background: var(--color-changed);
+    pointer-events: none;
+}
+
+.dropLine::before {
+    content: "";
+    position: absolute;
+    left: -4px;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    background: var(--color-changed);
+}
+
+.dragLabel {
+    position: fixed;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 400px;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-raised);
+    box-shadow:
+        0 1px 2px rgb(0 0 0 / 0.08),
+        0 10px 28px rgb(0 0 0 / 0.2);
+    pointer-events: none;
+}
+
+.dragHint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.noMatches,
+.inspectorEmpty {
+    margin: 8px 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin: auto;
+    text-align: center;
+}
+
+.emptyTitle {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+}
+
+.emptyText {
+    margin: 0 0 8px;
+    color: var(--color-text-muted);
+}
+
+/* Inspector */
+
+.inspector {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    width: 340px;
+    min-height: 0;
+    overflow: auto;
+    border-left: 1px solid var(--color-border);
+    background: var(--color-bg);
+}
+
+.inspectorEmpty {
+    margin: 16px;
+}
+
+.inspectorSection {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 16px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.inspectorSection h3 {
+    margin: 0;
+}
+
+.inspectorTitle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.inspectorName {
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.inspectorName[data-folder] {
+    font-family: var(--font-ui);
+}
+
+.inspectorPath {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+
+.inspectorButtons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.inspectorNote {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    text-wrap: pretty;
+}
+
+.segmented {
+    display: flex;
+    height: 24px;
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+}
+
+.segment {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.segment + .segment {
+    border-left: 1px solid var(--color-border);
+}
+
+.segment:hover {
+    background: var(--color-hover);
+}
+
+.segment[aria-checked="true"] {
+    background: var(--color-selected);
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.details {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 8px 12px;
+}
+
+.detail {
+    display: contents;
+}
+
+.detail dt {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+
+.detail dd {
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.inspectorFooter {
+    flex: none;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    margin-top: auto;
+    padding: 0 8px;
+    border-top: 1px solid var(--color-border);
+}
+
+/* Dialogs */
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+.secretRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.secretRow input {
+    flex: 1;
+}
+
+.checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-sm);
+}
+
+.dialogText,
+.dialogNote {
+    margin: 0;
+}
+
+.dialogNote {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+
+.deleteList {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.checkbox input {
+    accent-color: var(--color-text);
+}

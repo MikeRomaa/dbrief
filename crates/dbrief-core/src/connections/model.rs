@@ -187,6 +187,8 @@ pub struct Connection {
     pub sort_order: f64,
     pub created_at: String,
     pub last_used_at: Option<String>,
+    /// From the last successful connect, e.g. "PostgreSQL 17.2". `None` until first connected.
+    pub server_version: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

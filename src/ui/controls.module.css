@@ -1,0 +1,169 @@
+/* Buttons, inputs and badges shared across views. */
+
+.button,
+.primary,
+.danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 10px;
+    border: 1px solid var(--color-text);
+    background: transparent;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.button:hover:not(:disabled) {
+    background: var(--color-hover);
+}
+
+.primary {
+    background: var(--color-text);
+    color: var(--color-bg);
+}
+
+.danger {
+    border-color: var(--color-error);
+    background: var(--color-error);
+    color: var(--color-bg);
+}
+
+.primary:hover:not(:disabled),
+.danger:hover:not(:disabled) {
+    opacity: 0.88;
+}
+
+.button:disabled,
+.primary:disabled,
+.danger:disabled,
+.ghost:disabled,
+.iconButton:disabled {
+    opacity: 0.4;
+}
+
+.button:focus-visible,
+.primary:focus-visible,
+.danger:focus-visible {
+    outline-offset: 2px;
+}
+
+/* Text-only button, e.g. "Collapse all" or "Remove connection". */
+.ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+}
+
+.ghost:hover:not(:disabled) {
+    background: var(--color-hover);
+    color: var(--color-text);
+}
+
+.ghostDanger {
+    composes: ghost;
+    color: var(--color-error);
+}
+
+.ghostDanger:hover:not(:disabled) {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+}
+
+.iconButton {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+}
+
+.iconButton:hover:not(:disabled) {
+    background: var(--color-hover);
+    color: var(--color-text);
+}
+
+.input {
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    font-size: var(--font-size-sm);
+}
+
+.input::placeholder {
+    color: var(--color-text-faint);
+}
+
+/* Access level badge: RO quiet, RW outlined, DDL red. */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    height: 16px;
+    padding: 0 4px;
+    border: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-2xs);
+    line-height: 1;
+    color: var(--color-text-muted);
+}
+
+.badge[data-level="rw"] {
+    border-color: var(--color-text);
+    color: var(--color-text);
+}
+
+.badge[data-level="ddl"] {
+    border-color: transparent;
+    background: var(--color-error-bg);
+    color: var(--color-error);
+}
+
+/* Small square marks: color tag and "connected". */
+.dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+}
+
+.connectedDot {
+    composes: dot;
+    background: var(--color-added);
+}
+
+.error {
+    margin: 0;
+    padding: 6px 10px;
+    background: var(--color-error-bg);
+    color: var(--color-error);
+    font-size: var(--font-size-sm);
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.sectionLabel {
+    font-size: var(--font-size-2xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.count {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-2xs);
+    color: var(--color-text-faint);
+}

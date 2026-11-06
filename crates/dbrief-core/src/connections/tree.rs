@@ -148,6 +148,7 @@ mod tests {
             sort_order: order,
             created_at: String::new(),
             last_used_at: None,
+            server_version: None,
         }
     }
 

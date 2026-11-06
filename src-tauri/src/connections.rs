@@ -3,7 +3,9 @@
 //! Errors are [`ActionError`]: `secret-required` names the secret to ask for (connect and test retry
 //! with it in `prompted`), anything else is a message to show.
 
-use dbrief_core::actions::{self, ActionError, Connected, Saved, SavedSecrets, SecretChanges};
+use dbrief_core::actions::{
+    self, ActionError, Connected, OpenedFile, Saved, SavedSecrets, SecretChanges,
+};
 use dbrief_core::connections::{
     Connection, ConnectionInput, ConnectionTree, DeleteCounts, Folder, ItemRef, Removed,
 };
@@ -181,4 +183,11 @@ pub fn parse_connection_url(text: String) -> Result<UrlParts> {
 #[specta::specta]
 pub fn build_connection_url(input: ConnectionInput) -> String {
     engine::build_url(&input)
+}
+
+/// The connection for a SQLite file: reused when one exists for the same path, else created at the root.
+#[tauri::command]
+#[specta::specta]
+pub async fn open_sqlite_file(state: State<'_, AppState>, path: String) -> Result<OpenedFile> {
+    actions::open_sqlite_file(&state.connections, std::path::Path::new(&path)).await
 }

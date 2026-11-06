@@ -40,6 +40,7 @@ struct ConnectionRow {
     manual_transactions: bool,
     created_at: String,
     last_used_at: Option<String>,
+    server_version: Option<String>,
 }
 
 impl TryFrom<ConnectionRow> for Connection {
@@ -78,6 +79,7 @@ impl TryFrom<ConnectionRow> for Connection {
             sort_order: row.sort_order,
             created_at: row.created_at,
             last_used_at: row.last_used_at,
+            server_version: row.server_version,
         })
     }
 }
@@ -167,7 +169,8 @@ impl ConnectionRepo {
                 confirm_before_commit AS "confirm_before_commit: bool",
                 manual_transactions AS "manual_transactions: bool",
                 created_at,
-                last_used_at
+                last_used_at,
+                server_version
             FROM
                 connections
             "#
@@ -207,7 +210,8 @@ impl ConnectionRepo {
                 confirm_before_commit AS "confirm_before_commit: bool",
                 manual_transactions AS "manual_transactions: bool",
                 created_at,
-                last_used_at
+                last_used_at,
+                server_version
             FROM
                 connections
             WHERE
@@ -470,17 +474,24 @@ impl ConnectionRepo {
         Ok(())
     }
 
-    pub async fn touch_last_used(&self, id: Uuid) -> Result<(), ConnectionsError> {
+    /// Records a successful connect: the time, and the server version shown in the Connections view.
+    pub async fn record_connected(
+        &self,
+        id: Uuid,
+        server_version: &str,
+    ) -> Result<(), ConnectionsError> {
         let id_text = id.to_string();
         let result = sqlx::query!(
             r#"
             UPDATE
                 connections
             SET
-                last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                server_version = ?
             WHERE
                 id = ?
             "#,
+            server_version,
             id_text
         )
         .execute(&self.pool)

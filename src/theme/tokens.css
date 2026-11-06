@@ -40,6 +40,13 @@
     --font-size-md: 13px;
     --font-size-lg: 15px;
     --transition-fast: 120ms ease-out;
+
+    /* Connection color tags. */
+    --tag-red: var(--color-error);
+    --tag-orange: #e07a1f;
+    --tag-green: var(--color-added);
+    --tag-blue: var(--color-changed);
+    --tag-purple: var(--syntax-keyword);
 }
 
 /* Contrast palette: warm neutrals, square corners, blue only for state and focus. */

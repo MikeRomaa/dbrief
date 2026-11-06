@@ -19,6 +19,7 @@ body {
     background: var(--color-bg);
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    -webkit-user-select: none;
     user-select: none;
 }
 
