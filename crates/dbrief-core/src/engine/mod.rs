@@ -56,6 +56,7 @@ pub fn connector(input: &ConnectionInput, password: Option<&str>) -> Arc<dyn Con
 /// is kept apart from the connection so it can go to the credential store. `ignored_params` lists
 /// query parameters that have no matching field.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct UrlParts {
     pub engine: Option<Engine>,
     pub host: Option<String>,

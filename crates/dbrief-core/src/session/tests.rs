@@ -385,8 +385,23 @@ mod postgres {
         session.close().await;
 
         // Wrong password fails to connect.
+        // Wrong and missing passwords are both reported as a rejected password.
         let wrong = pg_target(&pg_input(port, AccessLevel::Rw), "wrong");
-        assert!(matches!(test(&wrong).await, Err(SessionError::Connect(_))));
+        assert!(matches!(
+            test(&wrong).await,
+            Err(SessionError::PasswordRejected(_))
+        ));
+        let missing = ConnectTarget::new(
+            Uuid::new_v4(),
+            &pg_input(port, AccessLevel::Rw),
+            &Credentials::default(),
+            &no_ssh(),
+        )
+        .unwrap();
+        assert!(matches!(
+            test(&missing).await,
+            Err(SessionError::PasswordRejected(_))
+        ));
     }
 
     #[tokio::test]

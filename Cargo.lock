@@ -1191,6 +1191,7 @@ dependencies = [
  "tauri-plugin-os",
  "tauri-specta",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -5163,6 +5164,7 @@ dependencies = [
  "paste",
  "rustc_version",
  "specta-macros",
+ "uuid",
 ]
 
 [[package]]

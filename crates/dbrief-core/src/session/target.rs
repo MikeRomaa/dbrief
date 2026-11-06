@@ -4,6 +4,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
+use serde::Deserialize;
 use uuid::Uuid;
 
 use super::SessionError;
@@ -15,7 +16,8 @@ use crate::ssh::{SshEnv, TunnelConfig};
 pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Secrets for connecting, from the credential store or a prompt. Never part of the connection.
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Credentials {
     pub password: Option<String>,
     pub ssh_password: Option<String>,

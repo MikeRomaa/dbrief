@@ -444,7 +444,7 @@ async fn tunnel_with_keys(fx: &Fixture) {
     };
     let err = test(&fx.target(&input, wrong)).await.unwrap_err();
     assert!(
-        matches!(err, SessionError::Ssh(SshError::Key { .. })),
+        matches!(err, SessionError::Ssh(SshError::WrongPassphrase(_))),
         "{err}"
     );
 

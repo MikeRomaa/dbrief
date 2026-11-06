@@ -28,6 +28,9 @@ pub enum SessionError {
     Invalid(String),
     #[error("could not connect: {0}")]
     Connect(String),
+    /// The server rejected the password, or needed one and none was given.
+    #[error("{0}")]
+    PasswordRejected(String),
     #[error("timed out connecting after {} s", .0.as_secs())]
     Timeout(Duration),
     #[error("SSH tunnel: {0}")]
@@ -44,6 +47,7 @@ pub enum SessionError {
 
 /// What the UI shows for an open session (status bar: connection, access level, server version).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct SessionInfo {
     pub id: Uuid,
     pub connection_id: Uuid,
@@ -54,6 +58,7 @@ pub struct SessionInfo {
 
 /// Result of a connection test. `latency_ms` is one round trip after connecting.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct TestResult {
     pub server_version: String,
     pub latency_ms: f64,
@@ -111,11 +116,7 @@ async fn connect(
             }
         };
 
-        target
-            .connector
-            .connect(via)
-            .await
-            .map_err(|e| SessionError::Connect(e.to_string()))
+        target.connector.connect(via).await.map_err(connect_error)
     };
 
     let mut conn = tokio::time::timeout(target.connect_timeout, attempt)
@@ -130,6 +131,19 @@ async fn connect(
     }
 
     Ok(conn)
+}
+
+/// SQLSTATE `invalid_password`: PostgreSQL's answer to a wrong or missing password.
+const INVALID_PASSWORD: &str = "28P01";
+
+fn connect_error(e: sqlx::Error) -> SessionError {
+    if let sqlx::Error::Database(db) = &e
+        && db.code().as_deref() == Some(INVALID_PASSWORD)
+    {
+        return SessionError::PasswordRejected(db.message().to_string());
+    }
+
+    SessionError::Connect(e.to_string())
 }
 
 /// Whether [`Session::ensure_alive`] found the connection working or had to reconnect.

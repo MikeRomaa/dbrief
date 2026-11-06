@@ -15,9 +15,49 @@ export const commands = {
 	defaultScriptsFolder: () => typedError<string, string>(__TAURI_INVOKE("default_scripts_folder")),
 	/**  Creates the scripts folder if it doesn't exist yet. */
 	createScriptsFolder: (path: string) => typedError<null, string>(__TAURI_INVOKE("create_scripts_folder", { path })),
+	/**  The Connections view: pinned connections and the folder tree. */
+	connectionTree: () => typedError<ConnectionTree_Serialize, ActionError>(__TAURI_INVOKE("connection_tree")),
+	getConnection: (id: string) => typedError<Connection_Serialize, ActionError>(__TAURI_INVOKE("get_connection", { id })),
+	/**  Which secrets are stored for a connection; the secrets themselves never leave the backend. */
+	savedSecrets: (id: string) => __TAURI_INVOKE<SavedSecrets>("saved_secrets", { id }),
+	/**
+	 *  False when there is no OS credential store: secrets are then asked for on connect and kept only
+	 *  until the app quits, so the modal hides "Save in keychain".
+	 */
+	secretStorePersistent: () => __TAURI_INVOKE<boolean>("secret_store_persistent"),
+	createFolder: (name: string, parentId: string | null) => typedError<Folder_Serialize, ActionError>(__TAURI_INVOKE("create_folder", { name, parentId })),
+	renameFolder: (id: string, name: string) => typedError<null, ActionError>(__TAURI_INVOKE("rename_folder", { id, name })),
+	createConnection: (input: ConnectionInput_Deserialize, secrets: SecretChanges_Deserialize) => typedError<Saved_Serialize, ActionError>(__TAURI_INVOKE("create_connection", { input, secrets })),
+	/**  Saves edits. Open sessions keep their access level and settings until they reconnect. */
+	updateConnection: (id: string, input: ConnectionInput_Deserialize, secrets: SecretChanges_Deserialize) => typedError<Saved_Serialize, ActionError>(__TAURI_INVOKE("update_connection", { id, input, secrets })),
+	duplicateConnection: (id: string) => typedError<Saved_Serialize, ActionError>(__TAURI_INVOKE("duplicate_connection", { id })),
+	/**  Moves into `parent_id` (`null` = root), before `before`, or to the end when `before` is `null`. */
+	moveItem: (item: ItemRef, parentId: string | null, before: ItemRef | null) => typedError<null, ActionError>(__TAURI_INVOKE("move_item", { item, parentId, before })),
+	setPinned: (id: string, pinned: boolean) => typedError<null, ActionError>(__TAURI_INVOKE("set_pinned", { id, pinned })),
+	/**  What removing `item` would delete, for the confirm dialog. */
+	deleteCounts: (item: ItemRef) => typedError<DeleteCounts, ActionError>(__TAURI_INVOKE("delete_counts", { item })),
+	/**  Removes a folder or connection with everything tied to it, closing its open sessions. */
+	removeItem: (item: ItemRef) => typedError<Removed, ActionError>(__TAURI_INVOKE("remove_item", { item })),
+	/**  Tests the modal's settings. `id` is set when editing, so stored secrets fill in untyped ones. */
+	testConnection: (id: string | null, input: ConnectionInput_Deserialize, prompted: Credentials_Deserialize) => typedError<TestResult, ActionError>(__TAURI_INVOKE("test_connection", { id, input, prompted })),
+	/**  Opens a session. On `secret-required`, ask for that secret and call again with it in `prompted`. */
+	connect: (id: string, prompted: Credentials_Deserialize, remember: boolean) => typedError<Connected_Serialize, ActionError>(__TAURI_INVOKE("connect", { id, prompted, remember })),
+	disconnect: (sessionId: string) => typedError<null, ActionError>(__TAURI_INVOKE("disconnect", { sessionId })),
+	listSessions: () => typedError<SessionInfo[], ActionError>(__TAURI_INVOKE("list_sessions")),
+	/**  Reads a pasted `postgresql://…`, `sqlite:…` URL or file path into connection fields. */
+	parseConnectionUrl: (text: string) => typedError<UrlParts_Serialize, ActionError>(__TAURI_INVOKE("parse_connection_url", { text })),
+	/**  The copyable URL for the modal's settings, without the password. */
+	buildConnectionUrl: (input: ConnectionInput_Deserialize) => __TAURI_INVOKE<string>("build_connection_url", { input }),
 };
 
 /* Types */
+/**  What a connection's sessions may do: read only, read and write data, or also change the schema. */
+export type AccessLevel = "ro" | "rw" | "ddl";
+
+export type ActionError = 
+/**  Connecting needs this secret, or the one given was rejected. */
+{ kind: "secret-required"; secret: SecretKind; message: string } | { kind: "failed"; message: string };
+
 export type Appearance = Appearance_Serialize | Appearance_Deserialize;
 
 export type Appearance_Deserialize = {
@@ -26,6 +66,141 @@ export type Appearance_Deserialize = {
 
 export type Appearance_Serialize = {
 	theme: Theme,
+};
+
+/**  An opened session. `warning` is set when the prompted secrets couldn't be remembered. */
+export type Connected = Connected_Serialize | Connected_Deserialize;
+
+/**  An opened session. `warning` is set when the prompted secrets couldn't be remembered. */
+export type Connected_Deserialize = {
+	session: SessionInfo,
+	warning?: string | null,
+};
+
+/**  An opened session. `warning` is set when the prompted secrets couldn't be remembered. */
+export type Connected_Serialize = {
+	session: SessionInfo,
+	warning: string | null,
+};
+
+/**  A saved connection. Timestamps are ISO 8601 UTC strings. */
+export type Connection = Connection_Serialize | Connection_Deserialize;
+
+/**
+ *  The editable part of a connection: what the Add connection modal fills in.
+ *  Server fields apply to PostgreSQL; `file_path` (canonical absolute path) to SQLite.
+ */
+export type ConnectionInput = ConnectionInput_Serialize | ConnectionInput_Deserialize;
+
+/**
+ *  The editable part of a connection: what the Add connection modal fills in.
+ *  Server fields apply to PostgreSQL; `file_path` (canonical absolute path) to SQLite.
+ */
+export type ConnectionInput_Deserialize = {
+	name: string,
+	folder_id?: string | null,
+	engine: Engine,
+	access_level: AccessLevel,
+	color_tag?: string | null,
+	host?: string | null,
+	port?: number | null,
+	database?: string | null,
+	username?: string | null,
+	ssl_mode?: SslMode | null,
+	ca_cert_path?: string | null,
+	file_path?: string | null,
+	ssh?: SshTunnel_Deserialize | null,
+	connect_timeout_s?: number | null,
+	query_timeout_s?: number | null,
+	default_schema?: string | null,
+	startup_sql?: string | null,
+	confirm_before_commit: boolean,
+	manual_transactions: boolean,
+};
+
+/**
+ *  The editable part of a connection: what the Add connection modal fills in.
+ *  Server fields apply to PostgreSQL; `file_path` (canonical absolute path) to SQLite.
+ */
+export type ConnectionInput_Serialize = {
+	name: string,
+	folder_id: string | null,
+	engine: Engine,
+	access_level: AccessLevel,
+	color_tag: string | null,
+	host: string | null,
+	port: number | null,
+	database: string | null,
+	username: string | null,
+	ssl_mode: SslMode | null,
+	ca_cert_path: string | null,
+	file_path: string | null,
+	ssh: SshTunnel_Serialize | null,
+	connect_timeout_s: number | null,
+	query_timeout_s: number | null,
+	default_schema: string | null,
+	startup_sql: string | null,
+	confirm_before_commit: boolean,
+	manual_transactions: boolean,
+};
+
+/**  The Connections view: pinned connections (also listed in their folders) and the folder tree. */
+export type ConnectionTree = ConnectionTree_Serialize | ConnectionTree_Deserialize;
+
+/**  The Connections view: pinned connections (also listed in their folders) and the folder tree. */
+export type ConnectionTree_Deserialize = {
+	pinned: Connection_Deserialize[],
+	root: TreeNode_Deserialize[],
+};
+
+/**  The Connections view: pinned connections (also listed in their folders) and the folder tree. */
+export type ConnectionTree_Serialize = {
+	pinned: Connection_Serialize[],
+	root: TreeNode_Serialize[],
+};
+
+/**  A saved connection. Timestamps are ISO 8601 UTC strings. */
+export type Connection_Deserialize = {
+	id: string,
+	pinned: boolean,
+	sort_order: number | null,
+	created_at: string,
+	last_used_at?: string | null,
+} & ConnectionInput_Deserialize;
+
+/**  A saved connection. Timestamps are ISO 8601 UTC strings. */
+export type Connection_Serialize = {
+	id: string,
+	pinned: boolean,
+	sort_order: number | null,
+	created_at: string,
+	last_used_at: string | null,
+} & ConnectionInput_Serialize;
+
+/**  Secrets for connecting, from the credential store or a prompt. Never part of the connection. */
+export type Credentials = Credentials_Serialize | Credentials_Deserialize;
+
+/**  Secrets for connecting, from the credential store or a prompt. Never part of the connection. */
+export type Credentials_Deserialize = {
+	password?: string | null,
+	ssh_password?: string | null,
+	ssh_passphrase?: string | null,
+};
+
+/**  Secrets for connecting, from the credential store or a prompt. Never part of the connection. */
+export type Credentials_Serialize = {
+	password: string | null,
+	ssh_password: string | null,
+	ssh_passphrase: string | null,
+};
+
+/**
+ *  What deleting an item removes. Counts for history, diagrams, and schema cache are added by the
+ *  milestones that introduce those tables.
+ */
+export type DeleteCounts = {
+	folders: number,
+	connections: number,
 };
 
 /**  Editor settings. `scripts_folder` is an absolute path, empty until chosen on first launch. */
@@ -39,6 +214,114 @@ export type Editor_Deserialize = {
 /**  Editor settings. `scripts_folder` is an absolute path, empty until chosen on first launch. */
 export type Editor_Serialize = {
 	scripts_folder: string,
+};
+
+/**  Database engine of a connection. */
+export type Engine = "postgres" | "sqlite";
+
+export type Folder = Folder_Serialize | Folder_Deserialize;
+
+/**  A folder with its children. `connection_count` includes connections in nested folders. */
+export type FolderNode = FolderNode_Serialize | FolderNode_Deserialize;
+
+/**  A folder with its children. `connection_count` includes connections in nested folders. */
+export type FolderNode_Deserialize = {
+	connection_count: number,
+	children: TreeNode_Deserialize[],
+} & Folder_Deserialize;
+
+/**  A folder with its children. `connection_count` includes connections in nested folders. */
+export type FolderNode_Serialize = {
+	connection_count: number,
+	children: TreeNode_Serialize[],
+} & Folder_Serialize;
+
+export type Folder_Deserialize = {
+	id: string,
+	parent_id?: string | null,
+	name: string,
+	sort_order: number | null,
+};
+
+export type Folder_Serialize = {
+	id: string,
+	parent_id: string | null,
+	name: string,
+	sort_order: number | null,
+};
+
+/**  A folder or a connection, e.g. the item being moved or deleted. */
+export type ItemRef = { kind: "folder"; id: string } | { kind: "connection"; id: string };
+
+/**
+ *  What [`remove`] deleted. `secret_errors` lists credential store failures; the rows are deleted
+ *  regardless, so a broken credential store never keeps a connection around.
+ */
+export type Removed = {
+	connections: string[],
+	secret_errors: string[],
+};
+
+/**  A saved connection. `warning` is set when the connection was saved but its secrets weren't. */
+export type Saved = Saved_Serialize | Saved_Deserialize;
+
+/**  Which secrets are saved for a connection, so the modal can show them as filled without reading them. */
+export type SavedSecrets = {
+	password: boolean,
+	ssh_password: boolean,
+	ssh_passphrase: boolean,
+};
+
+/**  A saved connection. `warning` is set when the connection was saved but its secrets weren't. */
+export type Saved_Deserialize = {
+	connection: Connection_Deserialize,
+	warning?: string | null,
+};
+
+/**  A saved connection. `warning` is set when the connection was saved but its secrets weren't. */
+export type Saved_Serialize = {
+	connection: Connection_Serialize,
+	warning: string | null,
+};
+
+/**  What to do with one secret when saving a connection. */
+export type SecretChange = { action: "keep" } | { action: "set"; value: string } | { action: "clear" };
+
+/**
+ *  Secret changes from the Add connection modal. A secret the connection no longer uses (say, the
+ *  SSH password after switching to a key) is deleted whatever its change says.
+ */
+export type SecretChanges = SecretChanges_Serialize | SecretChanges_Deserialize;
+
+/**
+ *  Secret changes from the Add connection modal. A secret the connection no longer uses (say, the
+ *  SSH password after switching to a key) is deleted whatever its change says.
+ */
+export type SecretChanges_Deserialize = {
+	password?: SecretChange,
+	ssh_password?: SecretChange,
+	ssh_passphrase?: SecretChange,
+};
+
+/**
+ *  Secret changes from the Add connection modal. A secret the connection no longer uses (say, the
+ *  SSH password after switching to a key) is deleted whatever its change says.
+ */
+export type SecretChanges_Serialize = {
+	password: SecretChange,
+	ssh_password: SecretChange,
+	ssh_passphrase: SecretChange,
+};
+
+export type SecretKind = "password" | "ssh-password" | "ssh-passphrase";
+
+/**  What the UI shows for an open session (status bar: connection, access level, server version). */
+export type SessionInfo = {
+	id: string,
+	connection_id: string,
+	engine: Engine,
+	access_level: AccessLevel,
+	server_version: string,
 };
 
 /**  All settings. Each field is a TOML table matching a section of the Settings view. */
@@ -68,7 +351,109 @@ export type Settings_Serialize = {
 	editor: Editor_Serialize,
 };
 
+/**  How the SSH tunnel authenticates. Passwords and key passphrases live in the credential store. */
+export type SshAuth = { method: "password" } | { method: "private-key"; key_path: string } | { method: "agent" };
+
+/**
+ *  SSH tunnel through a bastion host. `host` is either a hostname or a `~/.ssh/config` alias;
+ *  `port` and `user` are optional when the alias provides them.
+ */
+export type SshTunnel = SshTunnel_Serialize | SshTunnel_Deserialize;
+
+/**
+ *  SSH tunnel through a bastion host. `host` is either a hostname or a `~/.ssh/config` alias;
+ *  `port` and `user` are optional when the alias provides them.
+ */
+export type SshTunnel_Deserialize = {
+	host: string,
+	port?: number | null,
+	user?: string | null,
+	auth: SshAuth,
+};
+
+/**
+ *  SSH tunnel through a bastion host. `host` is either a hostname or a `~/.ssh/config` alias;
+ *  `port` and `user` are optional when the alias provides them.
+ */
+export type SshTunnel_Serialize = {
+	host: string,
+	port: number | null,
+	user: string | null,
+	auth: SshAuth,
+};
+
+/**  PostgreSQL `sslmode`. */
+export type SslMode = "disable" | "allow" | "prefer" | "require" | "verify-ca" | "verify-full";
+
+/**  Result of a connection test. `latency_ms` is one round trip after connecting. */
+export type TestResult = {
+	server_version: string,
+	latency_ms: number | null,
+};
+
 export type Theme = "light" | "dark" | "system";
+
+/**  Siblings are ordered by `sort_order`; folders and connections share one order per parent. */
+export type TreeNode = TreeNode_Serialize | TreeNode_Deserialize;
+
+/**  Siblings are ordered by `sort_order`; folders and connections share one order per parent. */
+export type TreeNode_Deserialize = {
+	kind: "folder",
+} & FolderNode_Deserialize | {
+	kind: "connection",
+} & Connection_Deserialize;
+
+/**  Siblings are ordered by `sort_order`; folders and connections share one order per parent. */
+export type TreeNode_Serialize = {
+	kind: "folder",
+} & FolderNode_Serialize | {
+	kind: "connection",
+} & Connection_Serialize;
+
+/**
+ *  Connection fields read from a URL ("Paste a connection URL", the Fields/URL toggle). The password
+ *  is kept apart from the connection so it can go to the credential store. `ignored_params` lists
+ *  query parameters that have no matching field.
+ */
+export type UrlParts = UrlParts_Serialize | UrlParts_Deserialize;
+
+/**
+ *  Connection fields read from a URL ("Paste a connection URL", the Fields/URL toggle). The password
+ *  is kept apart from the connection so it can go to the credential store. `ignored_params` lists
+ *  query parameters that have no matching field.
+ */
+export type UrlParts_Deserialize = {
+	engine?: Engine | null,
+	host?: string | null,
+	port?: number | null,
+	database?: string | null,
+	username?: string | null,
+	password?: string | null,
+	ssl_mode?: SslMode | null,
+	ca_cert_path?: string | null,
+	connect_timeout_s?: number | null,
+	file_path?: string | null,
+	ignored_params: string[],
+};
+
+/**
+ *  Connection fields read from a URL ("Paste a connection URL", the Fields/URL toggle). The password
+ *  is kept apart from the connection so it can go to the credential store. `ignored_params` lists
+ *  query parameters that have no matching field.
+ */
+export type UrlParts_Serialize = {
+	engine: Engine | null,
+	host: string | null,
+	port: number | null,
+	database: string | null,
+	username: string | null,
+	password: string | null,
+	ssl_mode: SslMode | null,
+	ca_cert_path: string | null,
+	connect_timeout_s: number | null,
+	file_path: string | null,
+	ignored_params: string[],
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

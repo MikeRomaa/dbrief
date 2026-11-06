@@ -12,6 +12,7 @@ const SERVICE: &str = "dbrief";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum SecretKind {
     Password,
     SshPassword,

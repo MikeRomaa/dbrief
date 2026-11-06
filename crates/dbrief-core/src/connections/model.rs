@@ -11,6 +11,7 @@ macro_rules! text_enum {
     ($(#[$meta:meta])* $name:ident { $($variant:ident => $text:literal),+ $(,)? }) => {
         $(#[$meta])*
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+        #[cfg_attr(feature = "specta", derive(specta::Type))]
         #[serde(rename_all = "kebab-case")]
         pub enum $name {
             $($variant),+
@@ -79,6 +80,7 @@ impl AccessLevel {
 /// How the SSH tunnel authenticates. Passwords and key passphrases live in the credential store.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "kebab-case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum SshAuth {
     Password,
     PrivateKey { key_path: String },
@@ -88,6 +90,7 @@ pub enum SshAuth {
 /// SSH tunnel through a bastion host. `host` is either a hostname or a `~/.ssh/config` alias;
 /// `port` and `user` are optional when the alias provides them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct SshTunnel {
     pub host: String,
     pub port: Option<u16>,
@@ -98,6 +101,7 @@ pub struct SshTunnel {
 /// The editable part of a connection: what the Add connection modal fills in.
 /// Server fields apply to PostgreSQL; `file_path` (canonical absolute path) to SQLite.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct ConnectionInput {
     pub name: String,
     pub folder_id: Option<Uuid>,
@@ -174,6 +178,7 @@ fn blank(value: &Option<String>) -> bool {
 
 /// A saved connection. Timestamps are ISO 8601 UTC strings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Connection {
     pub id: Uuid,
     #[serde(flatten)]
@@ -185,6 +190,7 @@ pub struct Connection {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Folder {
     pub id: Uuid,
     pub parent_id: Option<Uuid>,
@@ -195,6 +201,7 @@ pub struct Folder {
 /// A folder or a connection, e.g. the item being moved or deleted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "id", rename_all = "kebab-case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum ItemRef {
     Folder(Uuid),
     Connection(Uuid),
@@ -203,6 +210,7 @@ pub enum ItemRef {
 /// What deleting an item removes. Counts for history, diagrams, and schema cache are added by the
 /// milestones that introduce those tables.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct DeleteCounts {
     pub folders: u32,
     pub connections: u32,

@@ -1,6 +1,7 @@
 //! Core of dbrief: app storage, migrations, settings, connections, database engines, secrets, sessions,
 //! SSH tunnels, and the scripts folder. Has no Tauri dependency.
 
+pub mod actions;
 pub mod connections;
 pub mod engine;
 pub mod scripts;

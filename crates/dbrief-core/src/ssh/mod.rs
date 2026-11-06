@@ -40,6 +40,8 @@ pub enum SshError {
     PasswordRequired,
     #[error("the private key {0} needs a passphrase")]
     PassphraseRequired(String),
+    #[error("wrong passphrase for the private key {0}")]
+    WrongPassphrase(String),
     #[error("could not read private key {path}: {reason}")]
     Key { path: String, reason: String },
     #[error("no private key file; choose one or set IdentityFile in ~/.ssh/config")]
@@ -378,10 +380,7 @@ fn load_key(path: &Path, passphrase: Option<&str>) -> Result<russh::keys::Privat
     let shown = path.display().to_string();
     russh::keys::load_secret_key(path, passphrase).map_err(|e| match e {
         russh::keys::Error::KeyIsEncrypted => SshError::PassphraseRequired(shown),
-        e if passphrase.is_some() && is_decrypt_error(&e) => SshError::Key {
-            path: shown,
-            reason: "wrong passphrase".into(),
-        },
+        e if passphrase.is_some() && is_decrypt_error(&e) => SshError::WrongPassphrase(shown),
         e => SshError::Key {
             path: shown,
             reason: e.to_string(),

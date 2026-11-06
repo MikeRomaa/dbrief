@@ -1,15 +1,24 @@
 //! Tauri app crate: thin commands that call into `dbrief-core`.
 
 mod commands;
+mod connections;
 
 use std::sync::Mutex;
 
+use dbrief_core::connections::ConnectionRepo;
+use dbrief_core::secrets::Secrets;
+use dbrief_core::session::SessionManager;
+use dbrief_core::ssh::SshEnv;
 use dbrief_core::{SettingsFile, Storage};
 use tauri::Manager;
 
 pub struct AppState {
     pub storage: Storage,
     pub settings: Mutex<SettingsFile>,
+    pub connections: ConnectionRepo,
+    pub secrets: Secrets,
+    pub sessions: SessionManager,
+    pub ssh_env: SshEnv,
 }
 
 /// Builds the tauri-specta command set. Also used by the `export_bindings` test.
@@ -21,6 +30,25 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::set_ui_state,
         commands::default_scripts_folder,
         commands::create_scripts_folder,
+        connections::connection_tree,
+        connections::get_connection,
+        connections::saved_secrets,
+        connections::secret_store_persistent,
+        connections::create_folder,
+        connections::rename_folder,
+        connections::create_connection,
+        connections::update_connection,
+        connections::duplicate_connection,
+        connections::move_item,
+        connections::set_pinned,
+        connections::delete_counts,
+        connections::remove_item,
+        connections::test_connection,
+        connections::connect,
+        connections::disconnect,
+        connections::list_sessions,
+        connections::parse_connection_url,
+        connections::build_connection_url,
     ])
 }
 
@@ -54,8 +82,12 @@ pub fn run() {
             let storage = tauri::async_runtime::block_on(Storage::open(&data_dir))?;
             let settings = SettingsFile::load(&data_dir)?;
             app.manage(AppState {
+                connections: ConnectionRepo::new(storage.pool().clone()),
                 storage,
                 settings: Mutex::new(settings),
+                secrets: Secrets::detect(),
+                sessions: SessionManager::default(),
+                ssh_env: SshEnv::new(&data_dir),
             });
             Ok(())
         })

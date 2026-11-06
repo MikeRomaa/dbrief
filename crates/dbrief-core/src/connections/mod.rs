@@ -32,7 +32,8 @@ pub enum ConnectionsError {
 
 /// What [`remove`] deleted. `secret_errors` lists credential store failures; the rows are deleted
 /// regardless, so a broken credential store never keeps a connection around.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Removed {
     pub connections: Vec<Uuid>,
     pub secret_errors: Vec<String>,

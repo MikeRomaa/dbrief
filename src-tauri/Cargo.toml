@@ -24,6 +24,7 @@ tauri-plugin-dialog = { version = "2" }
 tauri-plugin-os = { version = "2" }
 tauri-specta = { workspace = true }
 tokio = { workspace = true }
+uuid = { workspace = true }
 
 [lints]
 workspace = true

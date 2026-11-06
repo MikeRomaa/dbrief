@@ -24,6 +24,7 @@ Only the **next** milestone gets a detailed plan (`plans/3-…`, `plans/4-…`, 
 - 6, 7 and 8 are independent of each other and can be reordered.
 - The first-launch screen is in milestone 2 because it needs connection import. It also sets the scripts folder setting, which milestone 3 then uses.
 - File associations are in milestone 2 because opening a SQLite file creates a connection.
+- The statement classifier (read / write / DDL per access level) moved from milestone 2 to milestone 3, where running SQL first needs it. Idea so far: `sqlparser` with the PostgreSQL and SQLite dialects; unparseable SQL counts as DDL.
 - Settings sections are added in the milestone that introduces each feature; milestone 9 covers anything left.
 
 ## Status

@@ -10,6 +10,7 @@ use super::model::{Connection, Folder};
 
 /// The Connections view: pinned connections (also listed in their folders) and the folder tree.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct ConnectionTree {
     pub pinned: Vec<Connection>,
     pub root: Vec<TreeNode>,
@@ -18,6 +19,7 @@ pub struct ConnectionTree {
 /// Siblings are ordered by `sort_order`; folders and connections share one order per parent.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum TreeNode {
     Folder(FolderNode),
     Connection(Box<Connection>),
@@ -25,6 +27,7 @@ pub enum TreeNode {
 
 /// A folder with its children. `connection_count` includes connections in nested folders.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct FolderNode {
     #[serde(flatten)]
     pub folder: Folder,

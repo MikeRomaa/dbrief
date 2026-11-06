@@ -20,13 +20,13 @@ Users can create, organize, save and connect to PostgreSQL and SQLite databases.
 - [ ] First launch shows the welcome screen once.
 - [ ] Dropping or "Open with" a SQLite file (`.db .sqlite .sqlite3 .db3 .s3db`) creates or reuses a connection.
 - [ ] RO connections open read-only sessions at the database level.
-- [ ] The statement classifier labels SQL as read / write / DDL (used by milestone 3 to block statements).
 - [ ] `cargo test`, `npm test` and `npm run lint` pass.
 
 ## Out of scope
 
 - Running user SQL, results, transactions UI, Commit/Rollback prompts (milestone 3)
 - Tabs and per-tab sessions in the UI (milestone 3); the session manager is built here
+- Statement classifier (read / write / DDL), deferred to milestone 3, which is its first user
 - Schema cache and search (milestone 4)
 - "Recent queries" in the connection inspector (needs History, milestone 6); the section shows an empty state
 
@@ -40,7 +40,6 @@ Users can create, organize, save and connect to PostgreSQL and SQLite databases.
 - **SSH host keys:** a key in `~/.ssh/known_hosts` or the app's own `known_hosts` (app data dir) must match; a changed key is refused. Unknown hosts are trusted on first use and recorded in the app's file (OpenSSH `accept-new`); `~/.ssh/known_hosts` is never written.
 - **Export format:** TOML with a `version = 1` field. Import always adds new entries under a chosen parent folder.
 - **Sessions:** `dbrief-core::session` manages sessions keyed by an opaque session ID. Milestone 3 gives each tab its own session; here the UI opens one session per connection for Connect.
-- **Classifier:** `sqlparser` crate with the PostgreSQL and SQLite dialects. Unparseable SQL is treated as DDL (most restrictive), so it is only allowed on DDL connections.
 
 ## Data model (new migration)
 
@@ -110,10 +109,7 @@ Later tables (history, diagrams, schema cache) reference `connections(id) on del
    - `dbrief-core::ssh`: russh tunnel with password, private key (+ passphrase), SSH agent (ssh-agent on macOS/Linux, Pageant on Windows), and `~/.ssh/config` host aliases.
    - Tunnel lives as long as its session; closed on disconnect.
 
-6. **Statement classifier**
-   - `dbrief-core::classify`: split a statement and label it read / write / DDL per dialect.
-   - Covers SELECT, WITH, INSERT/UPDATE/DELETE/MERGE, CREATE/ALTER/DROP/TRUNCATE, GRANT/REVOKE, and data-modifying CTEs (`WITH … DELETE`).
-   - cargo tests with a table of statements and expected labels.
+6. **Statement classifier**: moved to milestone 3.
 
 7. **Tauri commands**
    - Commands for the connection tree, CRUD, move, pin, delete with counts, test, connect, disconnect, import, export.
