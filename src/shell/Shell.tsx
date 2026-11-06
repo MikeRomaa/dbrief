@@ -2,6 +2,7 @@ import { platform } from "@tauri-apps/plugin-os";
 import { LucideProvider } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useFirstLaunch } from "@/hooks/useFirstLaunch";
 import { useLayout } from "@/hooks/useLayout";
 import { useSettings } from "@/hooks/useSettings";
 import { useWindowHeight, useWindowWidth } from "@/hooks/useWindowSize";
@@ -24,12 +25,14 @@ import { StatusBar } from "@/shell/StatusBar";
 import { CommandsContext, RAIL_COMMANDS, SHELL_COMMANDS } from "@/shell/shellCommands";
 import { TooltipLayer } from "@/shell/TooltipLayer";
 import { TopBar } from "@/shell/TopBar";
+import { WelcomeScreen } from "@/shell/WelcomeScreen";
 
 import styles from "@/shell/Shell.module.css";
 
 export function Shell() {
     const { layout, dispatch, loaded, saveError } = useLayout();
-    const { settings, warning, setTheme } = useSettings();
+    const { settings, warning, setTheme, setScriptsFolder } = useSettings();
+    const firstLaunch = useFirstLaunch();
     const [registry] = useState(() => createCommandRegistry(platform()));
     const [searchOpen, setSearchOpen] = useState(false);
     const windowWidth = useWindowWidth();
@@ -76,8 +79,26 @@ export function Shell() {
         };
     }, [registry, dispatch]);
 
-    if (!loaded) {
+    if (!loaded || !firstLaunch.loaded) {
         return null;
+    }
+
+    if (firstLaunch.needed) {
+        const finishWelcome = async (scriptsFolder: string) => {
+            setScriptsFolder(scriptsFolder);
+            dispatch({ type: "openRailItem", item: "connections" });
+            await firstLaunch.complete();
+        };
+
+        return (
+            <LucideProvider size={16} strokeWidth={1.5}>
+                <div className={styles.welcome}>
+                    <TopBar />
+                    <WelcomeScreen theme={settings?.appearance.theme} onThemeChange={setTheme} onDone={finishWelcome} />
+                    <TooltipLayer />
+                </div>
+            </LucideProvider>
+        );
     }
 
     const sideWidth = sidePanelRenderedWidth(layout, windowWidth);
@@ -111,7 +132,12 @@ export function Shell() {
                         <div className={styles.center}>
                             <EditorArea>
                                 {layout.activeRailItem === "settings" ? (
-                                    <SettingsView theme={settings?.appearance.theme} onThemeChange={setTheme} />
+                                    <SettingsView
+                                        theme={settings?.appearance.theme}
+                                        onThemeChange={setTheme}
+                                        scriptsFolder={settings?.editor.scripts_folder}
+                                        onScriptsFolderChange={setScriptsFolder}
+                                    />
                                 ) : undefined}
                             </EditorArea>
                             <Splitter

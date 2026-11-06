@@ -19,6 +19,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::update_settings,
         commands::get_ui_state,
         commands::set_ui_state,
+        commands::default_scripts_folder,
+        commands::create_scripts_folder,
     ])
 }
 
@@ -43,6 +45,7 @@ pub fn run() {
     export_bindings(&builder);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {

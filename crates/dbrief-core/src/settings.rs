@@ -1,5 +1,5 @@
 //! `settings.toml`: typed settings with defaults, edited in place so the user's
-//! comments, key order, formatting and unknown keys survive writes from the app.
+//! comments, key order, formatting, and unknown keys survive writes from the app.
 
 use std::path::{Path, PathBuf};
 
@@ -14,8 +14,12 @@ const DEFAULT_FILE: &str = r#"# dbrief settings.
 # Changes made in the app are saved here automatically. Comments and unknown keys are kept.
 
 [appearance]
-# Color theme: "light", "dark" or "system" (follows the OS setting).
+# Color theme: "light", "dark", or "system" (follows the OS setting).
 theme = "system"
+
+[editor]
+# Folder where SQL scripts are saved as .sql files. Chosen on first launch.
+scripts_folder = ""
 "#;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,12 +39,21 @@ pub struct Appearance {
     pub theme: Theme,
 }
 
+/// Editor settings. `scripts_folder` is an absolute path, empty until chosen on first launch.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(default)]
+pub struct Editor {
+    pub scripts_folder: String,
+}
+
 /// All settings. Each field is a TOML table matching a section of the Settings view.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(default)]
 pub struct Settings {
     pub appearance: Appearance,
+    pub editor: Editor,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -139,8 +152,13 @@ impl SettingsFile {
     pub fn update(&mut self, new: Settings) -> Result<SettingsLoad, SettingsError> {
         if let Some(doc) = self.doc.as_mut() {
             let new_doc = toml_edit::ser::to_document(&new)?;
+            let old_doc = toml_edit::ser::to_document(&self.settings)?;
             let existing: Vec<String> = doc.as_table().iter().map(|(k, _)| k.to_string()).collect();
-            merge_table_like(doc.as_table_mut(), new_doc.as_table());
+            merge_table_like(
+                doc.as_table_mut(),
+                new_doc.as_table(),
+                Some(old_doc.as_table()),
+            );
             keep_trailing_text_in_place(doc, &existing);
             write_atomic(&self.path, &doc.to_string()).map_err(|source| SettingsError::Io {
                 path: self.path.clone(),
@@ -177,31 +195,61 @@ fn keep_trailing_text_in_place(doc: &mut DocumentMut, existing_keys: &[String]) 
     }
 }
 
-/// Copies every leaf of `src` into `dst`, changing only values that differ.
-/// Keys in `dst` that are not in `src` (unknown keys) are left alone. `dst` may be an
-/// inline table (`appearance = { theme = "dark" }`).
-fn merge_table_like(dst: &mut dyn TableLike, src: &dyn TableLike) {
+/// Copies the leaves of `src` into `dst`. Keys already in `dst` are updated in place when the
+/// value differs. Keys missing from `dst` are only added when their value changed from `old` (the
+/// settings before this update), so saving one setting doesn't write every default into the file.
+/// Keys in `dst` that are not in `src` (unknown keys) are left alone. `dst` may be an inline table
+/// (`appearance = { theme = "dark" }`).
+fn merge_table_like(dst: &mut dyn TableLike, src: &dyn TableLike, old: Option<&dyn TableLike>) {
     for (key, src_item) in src.iter() {
+        let old_item = old.and_then(|o| o.get(key));
+
         // Serialized settings come back as inline tables; treat any table-like item as a section.
         if let Some(src_table) = src_item.as_table_like() {
+            let old_table = old_item.and_then(Item::as_table_like);
             if !dst.get(key).is_some_and(Item::is_table_like) {
+                if !changed(src_item, old_item) {
+                    continue;
+                }
+
                 let mut table = Table::new();
                 table.set_implicit(false);
                 dst.insert(key, Item::Table(table));
             }
+
             if let Some(dst_table) = dst.get_mut(key).and_then(Item::as_table_like_mut) {
-                merge_table_like(dst_table, src_table);
+                merge_table_like(dst_table, src_table, old_table);
             }
         } else if let Some(src_value) = src_item.as_value() {
             match dst.get_mut(key).and_then(Item::as_value_mut) {
                 Some(dst_value) => replace_value(dst_value, src_value),
-                None => {
+                None if changed(src_item, old_item) => {
                     let mut value = src_value.clone();
                     value.decor_mut().clear();
                     dst.insert(key, Item::Value(value));
                 }
+                None => {}
             }
         }
+    }
+}
+
+/// Whether any leaf under `new` differs from the same leaf under `old` (missing counts as changed).
+fn changed(new: &Item, old: Option<&Item>) -> bool {
+    let Some(old) = old else {
+        return true;
+    };
+
+    if let Some(new_table) = new.as_table_like() {
+        let old_table = old.as_table_like();
+        return new_table
+            .iter()
+            .any(|(k, v)| changed(v, old_table.and_then(|t| t.get(k))));
+    }
+
+    match (new.as_value(), old.as_value()) {
+        (Some(a), Some(b)) => !same_value(a, b),
+        _ => true,
     }
 }
 
@@ -256,6 +304,7 @@ mod tests {
     fn dark() -> Settings {
         Settings {
             appearance: Appearance { theme: Theme::Dark },
+            ..Settings::default()
         }
     }
 
@@ -387,5 +436,67 @@ custom_key = 42
         let after = file.update(dark()).unwrap();
         assert_eq!(after.warning, None);
         assert_eq!(read(dir.path()), "[appearance]\ntheme = \"dark\"\n");
+    }
+
+    #[test]
+    fn update_does_not_write_unchanged_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(SETTINGS_FILE),
+            "[appearance]
+theme = \"light\"
+",
+        )
+        .unwrap();
+        let mut file = SettingsFile::load(dir.path()).unwrap();
+        file.update(dark()).unwrap();
+        assert_eq!(
+            read(dir.path()),
+            "[appearance]
+theme = \"dark\"
+"
+        );
+    }
+
+    #[test]
+    fn update_adds_changed_key_in_new_section() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(SETTINGS_FILE),
+            "[appearance]
+theme = \"light\"
+",
+        )
+        .unwrap();
+        let mut file = SettingsFile::load(dir.path()).unwrap();
+
+        let mut new = file.settings().clone();
+        new.editor.scripts_folder = "/home/me/scripts".into();
+        file.update(new.clone()).unwrap();
+
+        assert_eq!(
+            read(dir.path()),
+            "[appearance]
+theme = \"light\"
+
+[editor]
+scripts_folder = \"/home/me/scripts\"
+"
+        );
+        assert_eq!(SettingsFile::load(dir.path()).unwrap().settings(), &new);
+    }
+
+    #[test]
+    fn update_sets_key_in_default_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut file = SettingsFile::load(dir.path()).unwrap();
+
+        let mut new = file.settings().clone();
+        new.editor.scripts_folder = "C:/Users/me/Scripts".into();
+        file.update(new).unwrap();
+
+        let text = read(dir.path());
+        assert!(text.contains("# Folder where SQL scripts are saved"));
+        assert!(text.contains("scripts_folder = \"C:/Users/me/Scripts\""));
     }
 }

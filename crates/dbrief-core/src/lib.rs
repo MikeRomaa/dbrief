@@ -1,5 +1,6 @@
-//! Core of dbrief: app storage, migrations and settings. Has no Tauri dependency.
+//! Core of dbrief: app storage, migrations, settings, and the scripts folder. Has no Tauri dependency.
 
+pub mod scripts;
 pub mod settings;
 pub mod storage;
 

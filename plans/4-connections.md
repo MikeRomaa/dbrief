@@ -145,7 +145,8 @@ Later tables (history, diagrams, schema cache) reference `connections(id) on del
 
 12. **First launch**
     - Welcome screen when `ui_state.first_launch_done` is missing.
-    - Theme, scripts folder location (saved as `editor.scripts_folder` in `settings.toml`; folder created if missing), optional import.
+    - Theme, scripts folder location (saved as `editor.scripts_folder` in `settings.toml`; folder created if missing), optional import (added with step 11, once import exists).
+    - The scripts folder can also be changed later in Settings → Editor.
     - Then open the Connections view.
 
 13. **SQLite file opening**

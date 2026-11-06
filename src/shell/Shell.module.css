@@ -5,6 +5,14 @@
     min-width: 0;
 }
 
+/* First launch: title bar and the welcome screen only. */
+.welcome {
+    display: grid;
+    grid-template-rows: 34px minmax(0, 1fr);
+    height: 100vh;
+    min-width: 0;
+}
+
 .main {
     display: flex;
     min-height: 0;

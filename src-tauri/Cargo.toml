@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 specta = { workspace = true }
 specta-typescript = { workspace = true }
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = { version = "2" }
 tauri-plugin-os = { version = "2" }
 tauri-specta = { workspace = true }
 tokio = { workspace = true }

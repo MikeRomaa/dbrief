@@ -81,6 +81,19 @@ describe("layoutReducer", () => {
     });
 });
 
+describe("openRailItem", () => {
+    it("always shows the side panel, even when the item is already active", () => {
+        const s = layoutReducer(DEFAULT_LAYOUT, { type: "openRailItem", item: "connections" });
+        expect(s).toMatchObject({ activeRailItem: "connections", sidePanelVisible: true });
+
+        const hidden = { ...DEFAULT_LAYOUT, activeRailItem: "history" as const, sidePanelVisible: false };
+        expect(layoutReducer(hidden, { type: "openRailItem", item: "connections" })).toMatchObject({
+            activeRailItem: "connections",
+            sidePanelVisible: true,
+        });
+    });
+});
+
 describe("serialization", () => {
     it("round-trips", () => {
         const layout: LayoutState = {

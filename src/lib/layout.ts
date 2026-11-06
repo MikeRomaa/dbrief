@@ -83,6 +83,7 @@ export type LayoutAction =
     | { type: "setSidePanelWidth"; width: number }
     | { type: "setBottomPanelHeight"; height: number }
     | { type: "selectRailItem"; item: RailItem }
+    | { type: "openRailItem"; item: RailItem }
     | { type: "replace"; layout: LayoutState };
 
 export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutState {
@@ -112,6 +113,8 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
                 return { ...state, sidePanelVisible: false };
             }
 
+            return { ...state, activeRailItem: action.item, sidePanelVisible: true };
+        case "openRailItem":
             return { ...state, activeRailItem: action.item, sidePanelVisible: true };
         case "replace":
             return action.layout;

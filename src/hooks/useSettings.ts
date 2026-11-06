@@ -9,6 +9,7 @@ export interface SettingsState {
     settings: Settings | null;
     warning: string | null;
     setTheme: (theme: Theme) => void;
+    setScriptsFolder: (path: string) => void;
 }
 
 export function useSettings(): SettingsState {
@@ -38,10 +39,7 @@ export function useSettings(): SettingsState {
             .catch(() => {});
     }, [settings]);
 
-    const setTheme = (theme: Theme) => {
-        if (!settings) return;
-
-        const next = { ...settings, appearance: { ...settings.appearance, theme } };
+    const save = (next: Settings) => {
         setSettings(next);
 
         backend
@@ -50,5 +48,15 @@ export function useSettings(): SettingsState {
             .catch((e: unknown) => setWarning(`Could not save settings: ${String(e)}`));
     };
 
-    return { settings, warning, setTheme };
+    const setTheme = (theme: Theme) => {
+        if (!settings) return;
+        save({ ...settings, appearance: { ...settings.appearance, theme } });
+    };
+
+    const setScriptsFolder = (path: string) => {
+        if (!settings) return;
+        save({ ...settings, editor: { ...settings.editor, scripts_folder: path } });
+    };
+
+    return { settings, warning, setTheme, setScriptsFolder };
 }

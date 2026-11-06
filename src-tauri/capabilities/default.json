@@ -12,6 +12,7 @@
         "core:window:allow-internal-toggle-maximize",
         "core:window:allow-close",
         "core:window:allow-start-dragging",
-        "os:allow-platform"
+        "os:allow-platform",
+        "dialog:allow-open"
     ]
 }

@@ -11,6 +11,10 @@ export const commands = {
 	updateSettings: (settings: Settings_Deserialize) => typedError<SettingsResponse_Serialize, string>(__TAURI_INVOKE("update_settings", { settings })),
 	getUiState: (key: string) => typedError<string | null, string>(__TAURI_INVOKE("get_ui_state", { key })),
 	setUiState: (key: string, value: string) => typedError<null, string>(__TAURI_INVOKE("set_ui_state", { key, value })),
+	/**  Suggested scripts folder for first launch: `<Documents>/DBrief/Scripts`. */
+	defaultScriptsFolder: () => typedError<string, string>(__TAURI_INVOKE("default_scripts_folder")),
+	/**  Creates the scripts folder if it doesn't exist yet. */
+	createScriptsFolder: (path: string) => typedError<null, string>(__TAURI_INVOKE("create_scripts_folder", { path })),
 };
 
 /* Types */
@@ -22,6 +26,19 @@ export type Appearance_Deserialize = {
 
 export type Appearance_Serialize = {
 	theme: Theme,
+};
+
+/**  Editor settings. `scripts_folder` is an absolute path, empty until chosen on first launch. */
+export type Editor = Editor_Serialize | Editor_Deserialize;
+
+/**  Editor settings. `scripts_folder` is an absolute path, empty until chosen on first launch. */
+export type Editor_Deserialize = {
+	scripts_folder?: string,
+};
+
+/**  Editor settings. `scripts_folder` is an absolute path, empty until chosen on first launch. */
+export type Editor_Serialize = {
+	scripts_folder: string,
 };
 
 /**  All settings. Each field is a TOML table matching a section of the Settings view. */
@@ -42,11 +59,13 @@ export type SettingsResponse_Serialize = {
 /**  All settings. Each field is a TOML table matching a section of the Settings view. */
 export type Settings_Deserialize = {
 	appearance?: Appearance_Deserialize,
+	editor?: Editor_Deserialize,
 };
 
 /**  All settings. Each field is a TOML table matching a section of the Settings view. */
 export type Settings_Serialize = {
 	appearance: Appearance_Serialize,
+	editor: Editor_Serialize,
 };
 
 export type Theme = "light" | "dark" | "system";
@@ -60,3 +79,4 @@ async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; dat
         return { status: "error", error: e as any };
     }
 }
+

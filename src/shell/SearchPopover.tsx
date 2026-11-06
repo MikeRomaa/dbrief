@@ -9,7 +9,7 @@ interface SearchPopoverProps {
 
 /**
  * Search (⌘P) shown as a popover under the title bar. Results arrive in milestone 4;
- * for now it opens, takes input and closes.
+ * for now it opens, takes input, and closes.
  */
 export function SearchPopover({ onClose }: SearchPopoverProps) {
     const inputRef = useRef<HTMLInputElement>(null);
@@ -54,8 +54,8 @@ export function SearchPopover({ onClose }: SearchPopoverProps) {
                     ref={inputRef}
                     type="search"
                     className={styles.input}
-                    placeholder="Search connections, tables, columns and scripts"
-                    aria-label="Search connections, tables, columns and scripts"
+                    placeholder="Search connections, tables, columns, and scripts"
+                    aria-label="Search connections, tables, columns, and scripts"
                     spellCheck={false}
                     autoComplete="off"
                 />

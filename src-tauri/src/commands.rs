@@ -2,7 +2,7 @@
 
 use dbrief_core::Settings;
 use serde::Serialize;
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::AppState;
 
@@ -73,4 +73,23 @@ pub async fn set_ui_state(
         .set_ui_state(&key, &value)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Suggested scripts folder for first launch: `<Documents>/DBrief/Scripts`.
+#[tauri::command]
+#[specta::specta]
+pub fn default_scripts_folder(app: tauri::AppHandle) -> Result<String, String> {
+    let documents = app.path().document_dir().map_err(|e| e.to_string())?;
+    Ok(documents
+        .join("DBrief")
+        .join("Scripts")
+        .display()
+        .to_string())
+}
+
+/// Creates the scripts folder if it doesn't exist yet.
+#[tauri::command]
+#[specta::specta]
+pub fn create_scripts_folder(path: String) -> Result<(), String> {
+    dbrief_core::scripts::ensure_folder(std::path::Path::new(&path)).map_err(|e| e.to_string())
 }

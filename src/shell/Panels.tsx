@@ -8,13 +8,12 @@ import { commandHints, RAIL_COMMANDS, SHELL_COMMANDS, useCommands } from "@/shel
 
 import styles from "@/shell/Panels.module.css";
 
-const SIDE_PANEL_HINTS: Record<RailItem, string> = {
+const SIDE_PANEL_HINTS: Record<Exclude<RailItem, "settings">, string> = {
     connections: "Saved connections will appear here.",
     explorer: "Schemas and tables of the active connection will appear here.",
     scripts: "SQL scripts from your scripts folder will appear here.",
     history: "Queries you run will appear here.",
     diagrams: "Saved diagrams will appear here.",
-    settings: "Appearance",
 };
 
 export function SidePanel({ item, width }: { item: RailItem; width: number }) {
@@ -31,8 +30,13 @@ export function SidePanel({ item, width }: { item: RailItem; width: number }) {
             {item === "settings" ? (
                 <ul className={styles.sectionList} aria-label="Settings sections">
                     <li>
-                        <a className={styles.sectionLink} href="#settings-appearance" aria-current="true">
+                        <a className={styles.sectionLink} href="#settings-appearance">
                             Appearance
+                        </a>
+                    </li>
+                    <li>
+                        <a className={styles.sectionLink} href="#settings-editor">
+                            Editor
                         </a>
                     </li>
                 </ul>

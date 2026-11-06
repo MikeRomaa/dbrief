@@ -18,4 +18,6 @@ export const backend = {
     updateSettings: (settings: Settings): Promise<SettingsResponse> => unwrap(commands.updateSettings(settings)),
     getUiState: (key: string): Promise<string | null> => unwrap(commands.getUiState(key)),
     setUiState: (key: string, value: string): Promise<null> => unwrap(commands.setUiState(key, value)),
+    defaultScriptsFolder: (): Promise<string> => unwrap(commands.defaultScriptsFolder()),
+    createScriptsFolder: (path: string): Promise<null> => unwrap(commands.createScriptsFolder(path)),
 };
