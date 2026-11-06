@@ -2,10 +2,14 @@
 
 mod commands;
 mod connections;
+mod run;
+mod scripts;
 
 use std::sync::Mutex;
 
 use dbrief_core::connections::ConnectionRepo;
+use dbrief_core::scripts::ScriptWatcher;
+use dbrief_core::scripts::meta::ScriptMetaRepo;
 use dbrief_core::secrets::Secrets;
 use dbrief_core::session::SessionManager;
 use dbrief_core::ssh::SshEnv;
@@ -19,38 +23,64 @@ pub struct AppState {
     pub secrets: Secrets,
     pub sessions: SessionManager,
     pub ssh_env: SshEnv,
+    pub script_meta: ScriptMetaRepo,
+    pub script_watcher: Mutex<Option<ScriptWatcher>>,
 }
 
 /// Builds the tauri-specta command set. Also used by the `export_bindings` test.
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
-    tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
-        commands::get_settings,
-        commands::update_settings,
-        commands::get_ui_state,
-        commands::set_ui_state,
-        commands::default_scripts_folder,
-        commands::create_scripts_folder,
-        connections::connection_tree,
-        connections::get_connection,
-        connections::saved_secrets,
-        connections::secret_store_persistent,
-        connections::create_folder,
-        connections::rename_folder,
-        connections::create_connection,
-        connections::update_connection,
-        connections::duplicate_connection,
-        connections::move_item,
-        connections::set_pinned,
-        connections::delete_counts,
-        connections::remove_item,
-        connections::test_connection,
-        connections::connect,
-        connections::disconnect,
-        connections::list_sessions,
-        connections::parse_connection_url,
-        connections::build_connection_url,
-        connections::open_sqlite_file,
-    ])
+    tauri_specta::Builder::<tauri::Wry>::new()
+        .events(tauri_specta::collect_events![scripts::ScriptsChanged])
+        .commands(tauri_specta::collect_commands![
+            commands::get_settings,
+            commands::update_settings,
+            commands::get_ui_state,
+            commands::set_ui_state,
+            commands::default_scripts_folder,
+            commands::create_scripts_folder,
+            connections::connection_tree,
+            connections::get_connection,
+            connections::saved_secrets,
+            connections::secret_store_persistent,
+            connections::create_folder,
+            connections::rename_folder,
+            connections::create_connection,
+            connections::update_connection,
+            connections::duplicate_connection,
+            connections::move_item,
+            connections::set_pinned,
+            connections::delete_counts,
+            connections::remove_item,
+            connections::test_connection,
+            connections::connect,
+            connections::disconnect,
+            connections::list_sessions,
+            connections::parse_connection_url,
+            connections::build_connection_url,
+            connections::open_sqlite_file,
+            scripts::script_tree,
+            scripts::read_script,
+            scripts::write_script,
+            scripts::create_script,
+            scripts::create_script_folder,
+            scripts::rename_script,
+            scripts::delete_script,
+            scripts::script_meta,
+            scripts::set_script_connection,
+            scripts::set_script_schema,
+            scripts::remember_script_params,
+            run::run_statement,
+            run::fetch_more,
+            run::close_result,
+            run::cancel_statement,
+            run::transaction_state,
+            run::set_transaction_mode,
+            run::commit,
+            run::rollback,
+            run::acknowledge_lost_transaction,
+            run::set_session_schema,
+            run::export_result,
+        ])
 }
 
 /// Where the generated TypeScript bindings are written (relative to this crate).
@@ -81,6 +111,7 @@ pub fn run() {
             builder.mount_events(app);
             let data_dir = app.path().app_data_dir()?;
             let storage = tauri::async_runtime::block_on(Storage::open(&data_dir))?;
+            let storage_pool = storage.pool().clone();
             let settings = SettingsFile::load(&data_dir)?;
             app.manage(AppState {
                 connections: ConnectionRepo::new(storage.pool().clone()),
@@ -89,7 +120,10 @@ pub fn run() {
                 secrets: Secrets::detect(),
                 sessions: SessionManager::default(),
                 ssh_env: SshEnv::new(&data_dir),
+                script_meta: ScriptMetaRepo::new(storage_pool),
+                script_watcher: Mutex::new(None),
             });
+            scripts::watch(app.handle());
             Ok(())
         })
         .run(tauri::generate_context!())

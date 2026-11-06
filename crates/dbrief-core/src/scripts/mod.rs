@@ -1,4 +1,15 @@
-//! The scripts folder: plain `.sql` files on disk, chosen by the user.
+//! The scripts folder: plain `.sql` files on disk, chosen by the user. The folder is the source of
+//! truth; the app database only keeps per-script settings (see [`meta`]).
+
+mod files;
+pub mod meta;
+mod watch;
+
+pub use files::{
+    EXTENSION, ScriptNode, create_folder, create_script, delete, read, relative, rename, resolve,
+    tree, write,
+};
+pub use watch::ScriptWatcher;
 
 use std::path::Path;
 
@@ -8,11 +19,23 @@ pub enum ScriptsError {
     NotAbsolute(String),
     #[error("{0} exists but is not a folder")]
     NotAFolder(String),
-    #[error("could not create {path}: {source}")]
+    #[error("{path}: {source}")]
     Io {
         path: String,
         source: std::io::Error,
     },
+    #[error("{0} is outside the scripts folder")]
+    OutsideFolder(String),
+    #[error("{0} already exists")]
+    Exists(String),
+    #[error("{0}")]
+    Invalid(String),
+    #[error("could not move {path} to the trash: {reason}")]
+    Trash { path: String, reason: String },
+    #[error("could not watch the scripts folder: {0}")]
+    Watch(String),
+    #[error("database error: {0}")]
+    Db(#[from] sqlx::Error),
 }
 
 /// Makes sure `path` is an existing folder, creating it (and any parents) if missing.

@@ -4,21 +4,19 @@ Roadmap: milestone 2 of 9 (`2-roadmap.md`). Builds on milestone 1 (`3-foundation
 
 ## Goal
 
-Users can create, organize, save and connect to PostgreSQL and SQLite databases. First launch shows a welcome screen. SQLite files open by drag-drop and "Open with". Running queries comes in milestone 3; here a connection proves itself with Test and the status bar.
+Users can create, organize, save and connect to PostgreSQL and SQLite databases. First launch shows a welcome screen. Running queries comes in milestone 3; here a connection proves itself with Test and the connected mark in the Connections view.
 
 ## Done when
 
 - [ ] Add connection modal creates PostgreSQL and SQLite connections, from fields or a pasted URL.
 - [ ] Test shows server version and latency, or the error.
-- [ ] Connect opens a session; the status bar shows connection name, access level, server version and color tag tint.
+- [ ] Connect opens a session.
 - [ ] SSL modes and CA certificate work against a TLS-enabled PostgreSQL.
 - [ ] SSH tunnel works with password, private key (with passphrase), SSH agent and `~/.ssh/config` host aliases.
 - [ ] Passwords and SSH secrets live only in the OS credential store; falling back to a prompt when no store is available.
 - [ ] Connections view: Pinned section, nestable folders, drag-and-drop reorder and move, filter, collapse all, inspector.
 - [ ] Remove connection and delete folder show a confirm dialog with counts, then delete everything tied to them.
-- [ ] Export and import connections as TOML, without secrets.
 - [ ] First launch shows the welcome screen once.
-- [ ] Dropping or "Open with" a SQLite file (`.db .sqlite .sqlite3 .db3 .s3db`) creates or reuses a connection.
 - [ ] RO connections open read-only sessions at the database level.
 - [ ] `cargo test`, `npm test` and `npm run lint` pass.
 
@@ -27,6 +25,9 @@ Users can create, organize, save and connect to PostgreSQL and SQLite databases.
 - Running user SQL, results, transactions UI, Commit/Rollback prompts (milestone 3)
 - Tabs and per-tab sessions in the UI (milestone 3); the session manager is built here
 - Statement classifier (read / write / DDL), deferred to milestone 3, which is its first user
+- Opening SQLite files by drag-drop and "Open with" (file associations, single instance), deferred to milestone 9 with packaging; `open_sqlite_file` and the New → SQLite file picker are built here
+- Export and import of connections (TOML), deferred to milestone 9, including the optional import on the welcome screen
+- Active connection in the status bar and color tag tint, deferred to milestone 4, when the table view gives a clear active connection
 - Schema cache and search (milestone 4)
 - "Recent queries" in the connection inspector (needs History, milestone 6); the section shows an empty state
 
@@ -131,27 +132,17 @@ Later tables (history, diagrams, schema cache) reference `connections(id) on del
    - Generated URL with copy; Test, Cancel, Save, Save and connect.
    - The same modal edits existing connections.
 
-10. **Status bar and color tags**
-    - Status bar shows the active connection: name, access level, server version.
-    - Top bar and status bar tint with the connection's color tag when the Appearance setting is on.
-    - Add the setting to `settings.toml` and the Settings view.
+10. **Status bar and color tags**: moved to milestone 4.
 
-11. **Export and import**
-    - Export selected folders/connections (or all) to a TOML file; secrets excluded.
-    - Import into a chosen parent folder; always adds new entries; secrets asked for on first connect.
-    - cargo tests for round-trip and version checking.
+11. **Export and import**: moved to milestone 9.
 
 12. **First launch**
     - Welcome screen when `ui_state.first_launch_done` is missing.
-    - Theme, scripts folder location (saved as `editor.scripts_folder` in `settings.toml`; folder created if missing), optional import (added with step 11, once import exists).
+    - Theme, scripts folder location (saved as `editor.scripts_folder` in `settings.toml`; folder created if missing), optional import (moved to milestone 9 with export and import).
     - The scripts folder can also be changed later in Settings → Editor.
     - Then open the Connections view.
 
-13. **SQLite file opening**
-    - Window drag-drop of supported files.
-    - File associations in the Tauri bundle config for `.db .sqlite .sqlite3 .db3 .s3db`.
-    - Handle files passed on launch and to an already-running app (single-instance plugin on Windows/Linux, open-file event on macOS).
-    - Reuse an existing connection with the same canonical path, else create one at the root of the tree (name = file name, access RW).
+13. **SQLite file opening**: moved to milestone 9 (the `open_sqlite_file` command is built in step 8).
 
 14. **Verify**
     - Run through the "Done when" list.

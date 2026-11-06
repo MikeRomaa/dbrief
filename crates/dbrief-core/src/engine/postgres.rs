@@ -2,14 +2,17 @@
 
 use async_trait::async_trait;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
-use sqlx::postgres::{PgConnectOptions, PgSslMode};
+use sqlx::postgres::{PgConnectOptions, PgQueryResult, PgRow, PgSslMode, PgValueFormat};
 use sqlx::{AssertSqlSafe, Connection as _, PgConnection};
+use sqlx::{Executor as _, Row as _, TypeInfo as _, ValueRef as _};
 use url::Url;
 
 use super::{
-    Connector, EngineConnection, PATH, UrlError, UrlParts, decode, non_empty, strip_prefix_ci,
+    Connector, EngineConnection, PATH, UrlError, UrlParts, columns_of, decode, non_empty,
+    report_described_columns, strip_prefix_ci,
 };
 use crate::connections::{AccessLevel, ConnectionInput, Engine, SslMode};
+use crate::query::{CancelToken, ResultSink, Row, RunEnd, drive};
 use crate::ssh::Endpoint;
 
 /// Reported to the server as `application_name`.
@@ -94,13 +97,21 @@ impl Connector for PostgresConnector {
         &self,
         via: Option<&Endpoint>,
     ) -> Result<Box<dyn EngineConnection>, sqlx::Error> {
-        let conn = match via {
+        let mut conn = match via {
             None => PgConnection::connect_with(&self.options).await?,
             Some(endpoint) => {
                 PgConnection::connect_with(&through(&self.options, endpoint)?).await?
             }
         };
-        Ok(Box::new(PostgresConnection(conn)))
+        let pid: i32 = sqlx::query_scalar(
+            r#"
+            SELECT
+                pg_backend_pid()
+            "#,
+        )
+        .fetch_one(&mut conn)
+        .await?;
+        Ok(Box::new(PostgresConnection { conn, pid }))
     }
 }
 
@@ -139,7 +150,11 @@ fn pg_ssl_mode(mode: SslMode) -> PgSslMode {
     }
 }
 
-struct PostgresConnection(PgConnection);
+/// A connection and its backend pid, which `pg_cancel_backend` needs to stop a running statement.
+struct PostgresConnection {
+    conn: PgConnection,
+    pid: i32,
+}
 
 #[async_trait]
 impl EngineConnection for PostgresConnection {
@@ -150,7 +165,7 @@ impl EngineConnection for PostgresConnection {
                 server_version
             "#,
         )
-        .fetch_one(&mut self.0)
+        .fetch_one(&mut self.conn)
         .await?;
 
         // e.g. "17.2 (Debian 17.2-1.pgdg120+1)" → "PostgreSQL 17.2"
@@ -161,27 +176,72 @@ impl EngineConnection for PostgresConnection {
     }
 
     async fn ping(&mut self) -> Result<(), sqlx::Error> {
-        self.0.ping().await
+        self.conn.ping().await
     }
 
     async fn execute(&mut self, sql: &str) -> Result<(), sqlx::Error> {
         // User-written SQL (startup SQL, scripts) is what `AssertSqlSafe` is for.
         sqlx::raw_sql(AssertSqlSafe(sql.to_owned()))
-            .execute(&mut self.0)
+            .execute(&mut self.conn)
             .await?;
         Ok(())
+    }
+
+    /// Uses the simple query protocol, as psql does: values come back as text, so every type
+    /// displays without decoding.
+    async fn run(
+        &mut self,
+        sql: &str,
+        page_size: usize,
+        sink: &mut dyn ResultSink,
+    ) -> Result<RunEnd, sqlx::Error> {
+        let stream = sqlx::raw_sql(AssertSqlSafe(sql.to_owned())).fetch_many(&mut self.conn);
+        let end = drive(
+            stream,
+            page_size,
+            sink,
+            |row: &PgRow| columns_of(row.columns()),
+            pg_row,
+            |r: &PgQueryResult| r.rows_affected(),
+        )
+        .await?;
+
+        if !end.returned_rows && !end.stopped {
+            let described = (&mut self.conn).describe(super::user_sql(sql)).await;
+            report_described_columns(described, sink).await;
+        }
+        Ok(end)
+    }
+
+    fn cancel_token(&self) -> CancelToken {
+        CancelToken::Postgres { pid: self.pid }
     }
 
     #[cfg(test)]
     async fn fetch_text(&mut self, sql: &str) -> Result<String, sqlx::Error> {
         sqlx::query_scalar(AssertSqlSafe(sql.to_owned()))
-            .fetch_one(&mut self.0)
+            .fetch_one(&mut self.conn)
             .await
     }
 
     async fn close(self: Box<Self>) {
-        let _ = self.0.close().await;
+        let _ = self.conn.close().await;
     }
+}
+
+fn pg_row(row: &PgRow) -> Row {
+    (0..row.len())
+        .map(|i| {
+            let value = row.try_get_raw(i).ok()?;
+            if value.is_null() {
+                return None;
+            }
+            match value.format() {
+                PgValueFormat::Text => value.as_str().ok().map(str::to_owned),
+                PgValueFormat::Binary => Some(format!("({})", value.type_info().name())),
+            }
+        })
+        .collect()
 }
 
 /// A PostgreSQL identifier in double quotes, so names keep their case and spaces.

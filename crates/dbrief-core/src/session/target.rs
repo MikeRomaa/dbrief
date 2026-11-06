@@ -54,6 +54,8 @@ pub struct ConnectTarget {
     pub(super) connector: Arc<dyn Connector>,
     pub(super) ssh: Option<TunnelConfig>,
     pub(super) connect_timeout: Duration,
+    pub(super) query_timeout: Option<Duration>,
+    pub(super) manual_transactions: bool,
     pub(super) startup_sql: Option<String>,
 }
 
@@ -90,6 +92,11 @@ impl ConnectTarget {
             connect_timeout: input
                 .connect_timeout_s
                 .map_or(DEFAULT_CONNECT_TIMEOUT, |s| Duration::from_secs(s.into())),
+            manual_transactions: input.manual_transactions,
+            query_timeout: input
+                .query_timeout_s
+                .filter(|s| *s > 0)
+                .map(|s| Duration::from_secs(s.into())),
             startup_sql: input
                 .startup_sql
                 .clone()

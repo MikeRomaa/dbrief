@@ -17,16 +17,16 @@ import {
     Unplug,
     X,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { ConnectionFormDialog, type FormStart } from "@/connections/ConnectionFormDialog";
 import { ConnectionInspector, EmptyInspector, FolderInspector } from "@/connections/ConnectionInspector";
 import { ConnectionTable } from "@/connections/ConnectionTable";
-import { FolderNameDialog, RemoveDialog, SecretPrompt } from "@/connections/dialogs";
+import { FolderNameDialog, RemoveDialog } from "@/connections/dialogs";
 import { PinnedCards } from "@/connections/PinnedCards";
+import { useConnectFlow } from "@/hooks/useConnectFlow";
 import type { ConnectionsState } from "@/hooks/useConnections";
-import { ActionFailure, backend, type Credentials } from "@/lib/backend";
-import type { SecretKind } from "@/lib/bindings";
+import { backend, type Credentials } from "@/lib/backend";
 import {
     allFolderIds,
     type Connection,
@@ -46,24 +46,11 @@ import controls from "@/ui/controls.module.css";
 /** Extensions offered when picking a SQLite file; same list as `SQLITE_EXTENSIONS` in dbrief-core. */
 const SQLITE_EXTENSIONS = ["db", "sqlite", "sqlite3", "db3", "s3db"];
 
-const SECRET_FIELDS: Record<SecretKind, keyof Credentials> = {
-    password: "password",
-    "ssh-password": "ssh_password",
-    "ssh-passphrase": "ssh_passphrase",
-};
-
 type DialogState =
     | { kind: "form"; connection: Connection | null; start: FormStart }
     | { kind: "new-folder"; parentId: string | null }
     | { kind: "rename-folder"; id: string; name: string }
-    | { kind: "remove"; item: ItemRef; name: string }
-    | {
-          kind: "secret";
-          connection: Connection;
-          secret: SecretKind;
-          problem: string | null;
-          prompted: Credentials;
-      };
+    | { kind: "remove"; item: ItemRef; name: string };
 
 export function ConnectionsView({ state }: { state: ConnectionsState }) {
     const { tree, index, sessions, home, collapsed, sort, run } = state;
@@ -88,35 +75,16 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
         state.setCollapsed(next);
     };
 
-    const connect = useCallback(
-        async (connection: Connection, prompted: Credentials = {}, remember = false) => {
-            setConnecting(connection.id);
-            try {
-                const result = await backend.connect(connection.id, prompted, remember);
-                if (result.warning) state.report(result.warning);
-                await state.reload();
-            } catch (e) {
-                if (e instanceof ActionFailure && e.error.kind === "secret-required") {
-                    const { secret, message } = e.error;
-                    // Only call it a failure when a secret was actually tried: typed, or stored.
-                    const saved = await backend.savedSecrets(connection.id).catch(() => null);
-                    const tried =
-                        prompted[SECRET_FIELDS[secret]] != null ||
-                        (secret === "password"
-                            ? saved?.password
-                            : secret === "ssh-password"
-                              ? saved?.ssh_password
-                              : saved?.ssh_passphrase);
-                    setDialog({ kind: "secret", connection, secret, problem: tried ? message : null, prompted });
-                } else {
-                    state.report(e instanceof Error ? e.message : String(e));
-                }
-            } finally {
-                setConnecting(null);
-            }
-        },
-        [state],
-    );
+    const connectFlow = useConnectFlow(state.persistentSecrets, state.report);
+    const connect = async (connection: Connection, prompted: Credentials = {}) => {
+        setConnecting(connection.id);
+        try {
+            await connectFlow.connect(connection, prompted);
+        } finally {
+            setConnecting(null);
+            await state.reload();
+        }
+    };
 
     const disconnect = (connectionId: string) =>
         run(async () => {
@@ -488,20 +456,7 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
                     }}
                 />
             )}
-            {dialog?.kind === "secret" && (
-                <SecretPrompt
-                    connectionName={dialog.connection.name}
-                    secret={dialog.secret}
-                    problem={dialog.problem}
-                    canRemember={state.persistentSecrets}
-                    onClose={() => setDialog(null)}
-                    onSubmit={(value, remember) => {
-                        const prompted = { ...dialog.prompted, [SECRET_FIELDS[dialog.secret]]: value };
-                        setDialog(null);
-                        void connect(dialog.connection, prompted, remember);
-                    }}
-                />
-            )}
+            {connectFlow.prompt}
         </div>
     );
 }

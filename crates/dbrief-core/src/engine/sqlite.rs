@@ -2,11 +2,19 @@
 
 use async_trait::async_trait;
 use percent_encoding::utf8_percent_encode;
-use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{AssertSqlSafe, Connection as _, SqliteConnection};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::{Connector, EngineConnection, PATH, UrlError, UrlParts, decode, strip_prefix_ci};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteQueryResult, SqliteRow};
+use sqlx::{AssertSqlSafe, Connection as _, SqliteConnection};
+use sqlx::{Executor as _, Row as _, TypeInfo as _, ValueRef as _};
+
+use super::{
+    Connector, EngineConnection, PATH, UrlError, UrlParts, columns_of, decode,
+    report_described_columns, strip_prefix_ci,
+};
 use crate::connections::{AccessLevel, ConnectionInput, Engine};
+use crate::query::{CancelToken, ResultSink, Row, RunEnd, drive};
 use crate::ssh::Endpoint;
 
 /// Opens the existing file only, never creating one. RO opens with `mode=ro`. sqlx turns on
@@ -34,12 +42,23 @@ impl Connector for SqliteConnector {
         &self,
         _via: Option<&Endpoint>,
     ) -> Result<Box<dyn EngineConnection>, sqlx::Error> {
-        let conn = SqliteConnection::connect_with(&self.options).await?;
-        Ok(Box::new(SqliteEngineConnection(conn)))
+        let mut conn = SqliteConnection::connect_with(&self.options).await?;
+
+        // Every 1000 VM steps SQLite asks whether to go on; setting the flag interrupts the statement.
+        let interrupt = Arc::new(AtomicBool::new(false));
+        let flag = interrupt.clone();
+        conn.lock_handle()
+            .await?
+            .set_progress_handler(1000, move || !flag.load(Ordering::SeqCst));
+
+        Ok(Box::new(SqliteEngineConnection { conn, interrupt }))
     }
 }
 
-struct SqliteEngineConnection(SqliteConnection);
+struct SqliteEngineConnection {
+    conn: SqliteConnection,
+    interrupt: Arc<AtomicBool>,
+}
 
 #[async_trait]
 impl EngineConnection for SqliteEngineConnection {
@@ -50,34 +69,101 @@ impl EngineConnection for SqliteEngineConnection {
                 sqlite_version()
             "#,
         )
-        .fetch_one(&mut self.0)
+        .fetch_one(&mut self.conn)
         .await?;
 
         Ok(format!("SQLite {version}"))
     }
 
     async fn ping(&mut self) -> Result<(), sqlx::Error> {
-        self.0.ping().await
+        self.conn.ping().await
     }
 
     async fn execute(&mut self, sql: &str) -> Result<(), sqlx::Error> {
         // User-written SQL (startup SQL, scripts) is what `AssertSqlSafe` is for.
         sqlx::raw_sql(AssertSqlSafe(sql.to_owned()))
-            .execute(&mut self.0)
+            .execute(&mut self.conn)
             .await?;
         Ok(())
+    }
+
+    async fn run(
+        &mut self,
+        sql: &str,
+        page_size: usize,
+        sink: &mut dyn ResultSink,
+    ) -> Result<RunEnd, sqlx::Error> {
+        let stream = sqlx::raw_sql(AssertSqlSafe(sql.to_owned())).fetch_many(&mut self.conn);
+        let end = drive(
+            stream,
+            page_size,
+            sink,
+            |row: &SqliteRow| columns_of(row.columns()),
+            sqlite_row,
+            |r: &SqliteQueryResult| r.rows_affected(),
+        )
+        .await?;
+
+        if !end.returned_rows && !end.stopped {
+            let described = (&mut self.conn).describe(super::user_sql(sql)).await;
+            report_described_columns(described, sink).await;
+        }
+        Ok(end)
+    }
+
+    fn cancel_token(&self) -> CancelToken {
+        CancelToken::Sqlite(self.interrupt.clone())
     }
 
     #[cfg(test)]
     async fn fetch_text(&mut self, sql: &str) -> Result<String, sqlx::Error> {
         sqlx::query_scalar(AssertSqlSafe(sql.to_owned()))
-            .fetch_one(&mut self.0)
+            .fetch_one(&mut self.conn)
             .await
     }
 
     async fn close(self: Box<Self>) {
-        let _ = self.0.close().await;
+        let _ = self.conn.close().await;
     }
+}
+
+/// Bytes of a BLOB shown as hex before it is cut short.
+const BLOB_PREVIEW: usize = 32;
+
+/// Values by their storage class: integers and reals as numbers, BLOBs as a hex preview.
+fn sqlite_row(row: &SqliteRow) -> Row {
+    (0..row.len())
+        .map(|i| {
+            let value = row.try_get_raw(i).ok()?;
+            if value.is_null() {
+                return None;
+            }
+            match value.type_info().name() {
+                "INTEGER" => row
+                    .try_get_unchecked::<i64, _>(i)
+                    .ok()
+                    .map(|v| v.to_string()),
+                "REAL" => row
+                    .try_get_unchecked::<f64, _>(i)
+                    .ok()
+                    .map(|v| v.to_string()),
+                "BLOB" => row.try_get_unchecked::<Vec<u8>, _>(i).ok().map(|bytes| {
+                    let hex: String = bytes
+                        .iter()
+                        .take(BLOB_PREVIEW)
+                        .map(|b| format!("{b:02x}"))
+                        .collect();
+                    let more = if bytes.len() > BLOB_PREVIEW {
+                        "…"
+                    } else {
+                        ""
+                    };
+                    format!("x'{hex}{more}' ({} bytes)", bytes.len())
+                }),
+                _ => row.try_get_unchecked::<String, _>(i).ok(),
+            }
+        })
+        .collect()
 }
 
 /// `None` when `text` is neither a `sqlite:` / `file:` URL nor an absolute file path.

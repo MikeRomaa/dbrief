@@ -2,8 +2,11 @@
 //! SSH tunnels, and the scripts folder. Has no Tauri dependency.
 
 pub mod actions;
+pub mod classify;
 pub mod connections;
 pub mod engine;
+pub mod export;
+pub mod query;
 pub mod scripts;
 pub mod secrets;
 pub mod session;

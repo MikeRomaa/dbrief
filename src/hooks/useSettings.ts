@@ -10,6 +10,7 @@ export interface SettingsState {
     warning: string | null;
     setTheme: (theme: Theme) => void;
     setScriptsFolder: (path: string) => void;
+    update: (settings: Settings) => void;
 }
 
 export function useSettings(): SettingsState {
@@ -58,5 +59,7 @@ export function useSettings(): SettingsState {
         save({ ...settings, editor: { ...settings.editor, scripts_folder: path } });
     };
 
-    return { settings, warning, setTheme, setScriptsFolder };
+    const update = (next: Settings) => save(next);
+
+    return { settings, warning, setTheme, setScriptsFolder, update };
 }

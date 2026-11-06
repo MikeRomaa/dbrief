@@ -6,7 +6,9 @@ import { ConnectionsView } from "@/connections/ConnectionsView";
 import { useConnections } from "@/hooks/useConnections";
 import { useFirstLaunch } from "@/hooks/useFirstLaunch";
 import { useLayout } from "@/hooks/useLayout";
+import { useScriptTree } from "@/hooks/useScriptTree";
 import { useSettings } from "@/hooks/useSettings";
+import { useTabs } from "@/hooks/useTabs";
 import { useWindowHeight, useWindowWidth } from "@/hooks/useWindowSize";
 import { createCommandRegistry } from "@/lib/commands";
 import { plural } from "@/lib/connectionFormat";
@@ -18,6 +20,9 @@ import {
     SIZES,
     sidePanelRenderedWidth,
 } from "@/lib/layout";
+import { Store } from "@/lib/store";
+import { ScriptsPanel } from "@/scripts/ScriptsPanel";
+import { ScriptsWorkspace } from "@/scripts/ScriptsWorkspace";
 import { ActivityRail } from "@/shell/ActivityRail";
 import { EditorArea } from "@/shell/EditorArea";
 import { BottomPanel, Inspector, SidePanel } from "@/shell/Panels";
@@ -34,9 +39,12 @@ import styles from "@/shell/Shell.module.css";
 
 export function Shell() {
     const { layout, dispatch, loaded, saveError } = useLayout();
-    const { settings, warning, setTheme, setScriptsFolder } = useSettings();
+    const { settings, warning, setTheme, setScriptsFolder, update: updateSettings } = useSettings();
     const firstLaunch = useFirstLaunch();
     const connections = useConnections();
+    const tabs = useTabs();
+    const [scriptChanges] = useState(() => new Store<string[]>([]));
+    const scriptTree = useScriptTree(settings?.editor.scripts_folder, (paths) => scriptChanges.set(paths));
     const [registry] = useState(() => createCommandRegistry(platform()));
     const [searchOpen, setSearchOpen] = useState(false);
     const windowWidth = useWindowWidth();
@@ -122,7 +130,19 @@ export function Shell() {
                         {connectionsView && <ConnectionsView state={connections} />}
                         {!connectionsView && layout.sidePanelVisible && (
                             <>
-                                <SidePanel item={layout.activeRailItem} width={sideWidth} />
+                                <SidePanel item={layout.activeRailItem} width={sideWidth}>
+                                    {layout.activeRailItem === "scripts" ? (
+                                        <ScriptsPanel
+                                            tree={scriptTree.tree}
+                                            error={scriptTree.error}
+                                            activePath={tabs.tabs.active}
+                                            reload={scriptTree.reload}
+                                            onOpen={(path, preview) => tabs.dispatch({ type: "open", path, preview })}
+                                            onRenamed={(from, to) => tabs.dispatch({ type: "renamed", from, to })}
+                                            onRemoved={(path) => tabs.dispatch({ type: "removed", path })}
+                                        />
+                                    ) : undefined}
+                                </SidePanel>
                                 <Splitter
                                     orientation="vertical"
                                     label="Resize side panel"
@@ -138,14 +158,25 @@ export function Shell() {
                         )}
                         <div className={styles.center} hidden={connectionsView}>
                             <EditorArea>
-                                {layout.activeRailItem === "settings" ? (
-                                    <SettingsView
-                                        theme={settings?.appearance.theme}
-                                        onThemeChange={setTheme}
-                                        scriptsFolder={settings?.editor.scripts_folder}
-                                        onScriptsFolderChange={setScriptsFolder}
+                                {/* Script tabs stay mounted under Settings, so editors and sessions survive. */}
+                                {settings && tabs.loaded && (
+                                    <ScriptsWorkspace
+                                        tabs={tabs.tabs}
+                                        dispatch={tabs.dispatch}
+                                        connections={connections}
+                                        settings={settings}
+                                        changes={scriptChanges}
+                                        hidden={layout.activeRailItem === "settings"}
                                     />
-                                ) : undefined}
+                                )}
+                                {layout.activeRailItem === "settings" && (
+                                    <SettingsView
+                                        settings={settings}
+                                        onThemeChange={setTheme}
+                                        onScriptsFolderChange={setScriptsFolder}
+                                        onChange={updateSettings}
+                                    />
+                                )}
                             </EditorArea>
                             <Splitter
                                 orientation="horizontal"

@@ -120,3 +120,7 @@
     min-height: 0;
     overflow: auto;
 }
+
+.bottomResult {
+    padding: 8px;
+}

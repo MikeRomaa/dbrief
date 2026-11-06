@@ -20,6 +20,18 @@ theme = "system"
 [editor]
 # Folder where SQL scripts are saved as .sql files. Chosen on first launch.
 scripts_folder = ""
+# Show results under each statement; false sends them to the bottom panel.
+show_results_inline = true
+# Rows an inline result shows before it scrolls.
+inline_result_rows = 50
+# Suggest keywords and functions while typing.
+autocomplete = true
+# Format a script when it is saved.
+format_on_save = false
+
+[data_grid]
+# Rows fetched at a time; "Load more" fetches the next page.
+page_size = 200
 "#;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,11 +52,40 @@ pub struct Appearance {
 }
 
 /// Editor settings. `scripts_folder` is an absolute path, empty until chosen on first launch.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(default)]
 pub struct Editor {
     pub scripts_folder: String,
+    pub show_results_inline: bool,
+    pub inline_result_rows: u32,
+    pub autocomplete: bool,
+    pub format_on_save: bool,
+}
+
+impl Default for Editor {
+    fn default() -> Self {
+        Self {
+            scripts_folder: String::new(),
+            show_results_inline: true,
+            inline_result_rows: 50,
+            autocomplete: true,
+            format_on_save: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(default)]
+pub struct DataGrid {
+    pub page_size: u32,
+}
+
+impl Default for DataGrid {
+    fn default() -> Self {
+        Self { page_size: 200 }
+    }
 }
 
 /// All settings. Each field is a TOML table matching a section of the Settings view.
@@ -54,6 +95,7 @@ pub struct Editor {
 pub struct Settings {
     pub appearance: Appearance,
     pub editor: Editor,
+    pub data_grid: DataGrid,
 }
 
 #[derive(Debug, thiserror::Error)]

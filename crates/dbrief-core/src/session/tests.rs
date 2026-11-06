@@ -12,7 +12,7 @@ use crate::connections::ConnectionInput;
 use crate::ssh::SshEnv;
 
 /// Creates a SQLite file with one table and one row.
-async fn sqlite_file(dir: &Path) -> String {
+pub(super) async fn sqlite_file(dir: &Path) -> String {
     let path = dir.join("app.db");
     let options = SqliteConnectOptions::new()
         .filename(&path)
@@ -37,11 +37,11 @@ async fn sqlite_file(dir: &Path) -> String {
 }
 
 /// For connections without a tunnel, where the SSH settings are never read.
-fn no_ssh() -> SshEnv {
+pub(super) fn no_ssh() -> SshEnv {
     SshEnv::new(Path::new("unused"))
 }
 
-fn sqlite_target(path: &str, level: AccessLevel) -> ConnectTarget {
+pub(super) fn sqlite_target(path: &str, level: AccessLevel) -> ConnectTarget {
     let mut input = ConnectionInput::new("app", Engine::Sqlite, level);
     input.file_path = Some(path.into());
     ConnectTarget::new(Uuid::new_v4(), &input, &Credentials::default(), &no_ssh()).unwrap()
@@ -260,16 +260,16 @@ async fn manager_tracks_and_closes_sessions() {
     ));
 }
 
-mod postgres {
+pub(super) mod postgres {
     use testcontainers::ImageExt;
     use testcontainers::runners::AsyncRunner;
     use testcontainers_modules::postgres::Postgres;
 
     use super::*;
 
-    const PASSWORD: &str = "postgres";
+    pub(in crate::session) const PASSWORD: &str = "postgres";
 
-    fn pg_input(port: u16, level: AccessLevel) -> ConnectionInput {
+    pub(in crate::session) fn pg_input(port: u16, level: AccessLevel) -> ConnectionInput {
         let mut input = ConnectionInput::new("pg", Engine::Postgres, level);
         input.host = Some("127.0.0.1".into());
         input.port = Some(port);
@@ -278,7 +278,7 @@ mod postgres {
         input
     }
 
-    fn pg_target(input: &ConnectionInput, password: &str) -> ConnectTarget {
+    pub(in crate::session) fn pg_target(input: &ConnectionInput, password: &str) -> ConnectTarget {
         ConnectTarget::new(
             Uuid::new_v4(),
             input,

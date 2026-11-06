@@ -11,8 +11,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use percent_encoding::{AsciiSet, CONTROLS, percent_decode_str};
 use serde::{Deserialize, Serialize};
+use sqlx::{AssertSqlSafe, SqlSafeStr as _};
 
 use crate::connections::{ConnectionInput, Engine, SslMode};
+use crate::query::{CancelToken, Column, ResultSink, RunEnd};
 use crate::ssh::Endpoint;
 
 /// Opens connections with fixed settings. Kept by a session so it can reconnect the same way.
@@ -36,12 +38,60 @@ pub trait EngineConnection: Send {
     /// Runs one or more statements, ignoring any rows.
     async fn execute(&mut self, sql: &str) -> Result<(), sqlx::Error>;
 
+    /// Runs one user statement, sending its rows to `sink` in pages of `page_size`. A statement that
+    /// returns no rows still reports its columns when it has any (e.g. a `SELECT` matching nothing).
+    async fn run(
+        &mut self,
+        sql: &str,
+        page_size: usize,
+        sink: &mut dyn ResultSink,
+    ) -> Result<RunEnd, sqlx::Error>;
+
+    /// What stops a statement running on this connection.
+    fn cancel_token(&self) -> CancelToken;
+
     /// The first column of the first row, as text.
     #[cfg(test)]
     async fn fetch_text(&mut self, sql: &str) -> Result<String, sqlx::Error>;
 
     /// Closes the connection. Errors are ignored: they only mean it was already gone.
     async fn close(self: Box<Self>);
+}
+
+/// Result columns by name and database type.
+fn columns_of<C: sqlx::Column>(columns: &[C]) -> Vec<Column> {
+    use sqlx::TypeInfo as _;
+
+    columns
+        .iter()
+        .map(|c| Column {
+            name: c.name().to_owned(),
+            type_name: c.type_info().name().to_owned(),
+        })
+        .collect()
+}
+
+/// For a statement that returned no rows: reports the columns from describing it, if any (a `SELECT`
+/// matching nothing), so the result shows its headers. Statements that can't be described are
+/// commands.
+async fn report_described_columns<DB: sqlx::Database>(
+    described: Result<sqlx::Describe<DB>, sqlx::Error>,
+    sink: &mut dyn ResultSink,
+) {
+    let Ok(described) = described else {
+        return;
+    };
+
+    let columns = columns_of(described.columns());
+    if !columns.is_empty() {
+        sink.columns(columns).await;
+        sink.page(Vec::new(), false).await;
+    }
+}
+
+/// User SQL for sqlx; this is what `AssertSqlSafe` is for.
+fn user_sql(sql: &str) -> sqlx::SqlStr {
+    AssertSqlSafe(sql.to_owned()).into_sql_str()
 }
 
 /// The connector for `input`'s engine. `password` comes from the credential store or a prompt.

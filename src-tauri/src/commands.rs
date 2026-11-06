@@ -39,13 +39,24 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<SettingsResponse, Stri
 #[tauri::command]
 #[specta::specta]
 pub fn update_settings(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     settings: Settings,
 ) -> Result<SettingsResponse, String> {
-    let mut file = lock_settings(&state)?;
-    file.update(settings)
-        .map(Into::into)
-        .map_err(|e| e.to_string())
+    let response = {
+        let mut file = lock_settings(&state)?;
+        let old_folder = file.snapshot().settings.editor.scripts_folder;
+        let response = file.update(settings).map_err(|e| e.to_string())?;
+        (response, old_folder)
+    };
+
+    // A new scripts folder needs a new watcher.
+    let (response, old_folder) = response;
+    if response.settings.editor.scripts_folder != old_folder {
+        crate::scripts::watch(&app);
+    }
+
+    Ok(response.into())
 }
 
 #[tauri::command]

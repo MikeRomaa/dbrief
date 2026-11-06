@@ -7,17 +7,25 @@ import {
     type Credentials_Deserialize,
     commands,
     type DeleteCounts,
+    type ExportFormat,
     type Folder_Serialize,
     type ItemRef,
+    type MoreRows_Serialize,
     type OpenedFile_Serialize,
     type Removed,
+    type RunError_Serialize,
+    type RunOutput_Serialize,
     type Saved_Serialize,
     type SavedSecrets,
+    type ScriptMeta_Serialize,
+    type ScriptNode,
     type SecretChanges_Deserialize,
     type SessionInfo,
     type Settings_Serialize,
     type SettingsResponse_Serialize,
     type TestResult,
+    type TransactionMode,
+    type TransactionState_Serialize,
     type UrlParts_Serialize,
 } from "@/lib/bindings";
 
@@ -55,6 +63,26 @@ async function unwrapAction<T>(result: Promise<Result<T, ActionError>>): Promise
     const r = await result;
     if (r.status === "error") {
         throw new ActionFailure(r.error);
+    }
+
+    return r.data;
+}
+
+/** A failed statement or transaction command; `error.kind` says what kind (see `RunError`). */
+export class RunFailure extends Error {
+    readonly error: RunError_Serialize;
+
+    constructor(error: RunError_Serialize) {
+        super(error.kind === "query" ? error.error.message : error.message);
+        this.name = "RunFailure";
+        this.error = error;
+    }
+}
+
+async function unwrapRun<T>(result: Promise<Result<T, RunError_Serialize>>): Promise<T> {
+    const r = await result;
+    if (r.status === "error") {
+        throw new RunFailure(r.error);
     }
 
     return r.data;
@@ -107,4 +135,43 @@ export const backend = {
     disconnect: (sessionId: string): Promise<null> => unwrapAction(commands.disconnect(sessionId)),
     listSessions: (): Promise<SessionInfo[]> => unwrapAction(commands.listSessions()),
     openSqliteFile: (path: string): Promise<OpenedFile_Serialize> => unwrapAction(commands.openSqliteFile(path)),
+
+    scriptTree: (): Promise<ScriptNode[]> => unwrap(commands.scriptTree()),
+    readScript: (path: string): Promise<string> => unwrap(commands.readScript(path)),
+    writeScript: (path: string, text: string): Promise<null> => unwrap(commands.writeScript(path, text)),
+    createScript: (dir: string): Promise<string> => unwrap(commands.createScript(dir)),
+    createScriptFolder: (dir: string, name: string): Promise<string> => unwrap(commands.createScriptFolder(dir, name)),
+    renameScript: (from: string, to: string): Promise<null> => unwrap(commands.renameScript(from, to)),
+    deleteScript: (path: string): Promise<null> => unwrap(commands.deleteScript(path)),
+    scriptMeta: (path: string): Promise<ScriptMeta_Serialize> => unwrap(commands.scriptMeta(path)),
+    setScriptConnection: (path: string, connectionId: string | null): Promise<null> =>
+        unwrap(commands.setScriptConnection(path, connectionId)),
+    setScriptSchema: (path: string, schema: string | null): Promise<null> =>
+        unwrap(commands.setScriptSchema(path, schema)),
+    rememberScriptParams: (path: string, values: Record<string, string | null>): Promise<null> =>
+        unwrap(commands.rememberScriptParams(path, values)),
+
+    runStatement: (sessionId: string, sql: string, pageSize: number): Promise<RunOutput_Serialize> =>
+        unwrapRun(commands.runStatement(sessionId, sql, pageSize)),
+    fetchMore: (sessionId: string): Promise<MoreRows_Serialize> => unwrapRun(commands.fetchMore(sessionId)),
+    closeResult: (sessionId: string): Promise<null> => unwrapRun(commands.closeResult(sessionId)),
+    cancelStatement: (sessionId: string): Promise<null> => unwrapRun(commands.cancelStatement(sessionId)),
+    transactionState: (sessionId: string): Promise<TransactionState_Serialize> =>
+        unwrapRun(commands.transactionState(sessionId)),
+    setTransactionMode: (sessionId: string, mode: TransactionMode): Promise<null> =>
+        unwrapRun(commands.setTransactionMode(sessionId, mode)),
+    commit: (sessionId: string): Promise<null> => unwrapRun(commands.commit(sessionId)),
+    rollback: (sessionId: string): Promise<null> => unwrapRun(commands.rollback(sessionId)),
+    acknowledgeLostTransaction: (sessionId: string): Promise<null> =>
+        unwrapRun(commands.acknowledgeLostTransaction(sessionId)),
+    setSessionSchema: (sessionId: string, schema: string | null): Promise<null> =>
+        unwrapRun(commands.setSessionSchema(sessionId, schema)),
+    exportResult: (
+        sessionId: string,
+        sql: string,
+        format: ExportFormat,
+        path: string,
+        table: string,
+    ): Promise<number> =>
+        unwrapRun(commands.exportResult(sessionId, sql, format, path, table)).then((rows) => rows ?? 0),
 };

@@ -3,8 +3,12 @@
 //! with an SSH tunnel owns the tunnel: it opens with the session, is reopened on reconnect if it
 //! dropped, and closes with the session.
 
+mod run;
 mod target;
+mod transaction;
 
+#[cfg(test)]
+mod run_tests;
 #[cfg(test)]
 mod tests;
 
@@ -16,10 +20,14 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+pub use run::{CancelHandle, MoreRows, RunError, RunOutput};
 pub use target::{ConnectTarget, Credentials, DEFAULT_CONNECT_TIMEOUT};
+pub use transaction::{TransactionMode, TransactionStatement};
 
+use crate::classify::StatementKind;
 use crate::connections::{AccessLevel, Engine};
 use crate::engine::EngineConnection;
+use crate::query::QueryError;
 use crate::ssh::{SshError, Tunnel};
 
 #[derive(Debug, thiserror::Error)]
@@ -41,6 +49,21 @@ pub enum SessionError {
     TransactionLost,
     #[error("session {0} is not open")]
     NotFound(Uuid),
+    #[error("{} statements can't run on a {} connection", .kind.as_str(), .level.as_str().to_uppercase())]
+    Blocked {
+        kind: StatementKind,
+        level: AccessLevel,
+    },
+    #[error("{}", .0.message)]
+    Query(QueryError),
+    #[error("the connection was lost: {0}")]
+    ConnectionLost(String),
+    #[error("canceled")]
+    Canceled,
+    #[error("canceled after the {} s query timeout", .0.as_secs())]
+    QueryTimeout(Duration),
+    #[error("there is no open result to read more rows from")]
+    NoOpenResult,
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
 }
@@ -163,6 +186,10 @@ pub struct Session {
     target: ConnectTarget,
     tunnel: Option<Tunnel>,
     conn: Option<Box<dyn EngineConnection>>,
+    open: Option<run::OpenResult>,
+    cancel: CancelHandle,
+    mode: TransactionMode,
+    transaction: Vec<TransactionStatement>,
     in_transaction: bool,
     transaction_lost: bool,
 }
@@ -192,6 +219,17 @@ impl Session {
             }
         };
 
+        let cancel = CancelHandle::new(target.connector.clone());
+        let mode = if target.manual_transactions {
+            TransactionMode::Manual
+        } else {
+            TransactionMode::Auto
+        };
+        cancel.update(
+            conn.cancel_token(),
+            tunnel.as_ref().map(|t: &Tunnel| t.endpoint().clone()),
+        );
+
         Ok(Self {
             info: SessionInfo {
                 id: Uuid::new_v4(),
@@ -203,6 +241,10 @@ impl Session {
             target,
             tunnel,
             conn: Some(conn),
+            open: None,
+            cancel,
+            mode,
+            transaction: Vec::new(),
             in_transaction: false,
             transaction_lost: false,
         })
@@ -210,6 +252,11 @@ impl Session {
 
     pub fn info(&self) -> &SessionInfo {
         &self.info
+    }
+
+    /// Stops the running statement; usable while another task holds the session.
+    pub fn cancel_handle(&self) -> CancelHandle {
+        self.cancel.clone()
     }
 
     pub fn in_transaction(&self) -> bool {
@@ -223,6 +270,7 @@ impl Session {
 
     /// Checks the connection, reconnecting when that's safe (see [`Session`]).
     pub async fn ensure_alive(&mut self) -> Result<Liveness, SessionError> {
+        self.finish_open_result().await;
         if self.transaction_lost {
             return Err(SessionError::TransactionLost);
         }
@@ -243,23 +291,36 @@ impl Session {
             return Err(SessionError::TransactionLost);
         }
 
-        self.conn = Some(connect(&self.target, &mut self.tunnel).await?);
+        self.reconnect().await?;
         Ok(Liveness::Reconnected)
     }
 
     /// Reconnects after the user acknowledged a lost transaction.
     pub async fn reconnect_after_lost_transaction(&mut self) -> Result<(), SessionError> {
+        self.finish_open_result().await;
         if let Some(conn) = self.conn.take() {
             conn.close().await;
         }
 
-        self.conn = Some(connect(&self.target, &mut self.tunnel).await?);
+        self.reconnect().await?;
         self.transaction_lost = false;
+        Ok(())
+    }
+
+    /// Opens a new connection (and tunnel, if it dropped) and points the cancel handle at it.
+    async fn reconnect(&mut self) -> Result<(), SessionError> {
+        let conn = connect(&self.target, &mut self.tunnel).await?;
+        self.cancel.update(
+            conn.cancel_token(),
+            self.tunnel.as_ref().map(|t| t.endpoint().clone()),
+        );
+        self.conn = Some(conn);
         Ok(())
     }
 
     /// Runs one or more statements, ignoring any rows.
     pub async fn execute(&mut self, sql: &str) -> Result<(), SessionError> {
+        self.finish_open_result().await;
         let conn = self
             .conn
             .as_mut()
@@ -272,6 +333,7 @@ impl Session {
     }
 
     async fn close_all(&mut self) {
+        self.finish_open_result().await;
         if let Some(conn) = self.conn.take() {
             conn.close().await;
         }
@@ -289,6 +351,7 @@ impl Session {
     /// Simulates the network dropping the connection.
     #[cfg(test)]
     pub(crate) async fn drop_connection(&mut self) {
+        self.finish_open_result().await;
         if let Some(conn) = self.conn.take() {
             conn.close().await;
         }
@@ -297,6 +360,7 @@ impl Session {
     /// The first column of the first row, as text.
     #[cfg(test)]
     pub(crate) async fn fetch_text(&mut self, sql: &str) -> Result<String, SessionError> {
+        self.finish_open_result().await;
         let conn = self
             .conn
             .as_mut()
@@ -305,20 +369,30 @@ impl Session {
     }
 }
 
+/// An open session with what can be read or done without waiting for its lock (which a running
+/// statement holds).
+struct Entry {
+    info: SessionInfo,
+    session: Arc<Mutex<Session>>,
+    cancel: CancelHandle,
+}
+
 /// All open sessions, by session id. Each session has its own lock, so sessions run in parallel.
 #[derive(Default)]
 pub struct SessionManager {
-    sessions: Mutex<HashMap<Uuid, Arc<Mutex<Session>>>>,
+    sessions: Mutex<HashMap<Uuid, Entry>>,
 }
 
 impl SessionManager {
     pub async fn open(&self, target: ConnectTarget) -> Result<SessionInfo, SessionError> {
         let session = Session::open(target).await?;
         let info = session.info().clone();
-        self.sessions
-            .lock()
-            .await
-            .insert(info.id, Arc::new(Mutex::new(session)));
+        let entry = Entry {
+            info: info.clone(),
+            cancel: session.cancel_handle(),
+            session: Arc::new(Mutex::new(session)),
+        };
+        self.sessions.lock().await.insert(info.id, entry);
         Ok(info)
     }
 
@@ -327,55 +401,66 @@ impl SessionManager {
             .lock()
             .await
             .get(&id)
-            .cloned()
+            .map(|e| e.session.clone())
             .ok_or(SessionError::NotFound(id))
     }
 
     pub async fn list(&self) -> Vec<SessionInfo> {
-        let sessions: Vec<_> = self.sessions.lock().await.values().cloned().collect();
-        let mut infos = Vec::with_capacity(sessions.len());
-        for session in sessions {
-            infos.push(session.lock().await.info().clone());
-        }
-
-        infos
+        self.sessions
+            .lock()
+            .await
+            .values()
+            .map(|e| e.info.clone())
+            .collect()
     }
 
+    /// Stops the statement running on a session.
+    pub async fn cancel(&self, id: Uuid) -> Result<(), SessionError> {
+        let cancel = self
+            .sessions
+            .lock()
+            .await
+            .get(&id)
+            .map(|e| e.cancel.clone())
+            .ok_or(SessionError::NotFound(id))?;
+        cancel.cancel().await
+    }
+
+    /// Closes a session; a running statement is cancelled first.
     pub async fn close(&self, id: Uuid) -> Result<(), SessionError> {
-        let session = self
+        let entry = self
             .sessions
             .lock()
             .await
             .remove(&id)
             .ok_or(SessionError::NotFound(id))?;
-        close_shared(session).await;
+        close_entry(entry).await;
         Ok(())
     }
 
     /// Closes every session of a connection, e.g. when it is removed. Returns how many were closed.
     pub async fn close_connection(&self, connection_id: Uuid) -> usize {
-        let mut removed = Vec::new();
-        {
+        let removed: Vec<Entry> = {
             let mut sessions = self.sessions.lock().await;
-            let ids: Vec<Uuid> = sessions.keys().copied().collect();
-            for id in ids {
-                let belongs = sessions[&id].lock().await.info().connection_id == connection_id;
-                if belongs && let Some(session) = sessions.remove(&id) {
-                    removed.push(session);
-                }
-            }
-        }
+            let ids: Vec<Uuid> = sessions
+                .values()
+                .filter(|e| e.info.connection_id == connection_id)
+                .map(|e| e.info.id)
+                .collect();
+            ids.iter().filter_map(|id| sessions.remove(id)).collect()
+        };
 
         let count = removed.len();
-        for session in removed {
-            close_shared(session).await;
+        for entry in removed {
+            close_entry(entry).await;
         }
 
         count
     }
 }
 
-/// Closes a session that may still be borrowed elsewhere; waits for its lock first.
-async fn close_shared(session: Arc<Mutex<Session>>) {
-    session.lock().await.close_all().await;
+/// Cancels whatever the session is running, then waits for its lock and closes it.
+async fn close_entry(entry: Entry) {
+    let _ = entry.cancel.cancel().await;
+    entry.session.lock().await.close_all().await;
 }

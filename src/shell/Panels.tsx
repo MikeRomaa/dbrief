@@ -1,9 +1,11 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type { LayoutState, RailItem } from "@/lib/layout";
 import { handleRovingKeyDown } from "@/lib/roving";
+import { BottomResults } from "@/scripts/BottomResults";
 import { railTabId } from "@/shell/ActivityRail";
+import { LogPanel } from "@/shell/LogPanel";
 import { commandHints, RAIL_COMMANDS, SHELL_COMMANDS, useCommands } from "@/shell/shellCommands";
 
 import styles from "@/shell/Panels.module.css";
@@ -16,7 +18,8 @@ const SIDE_PANEL_HINTS: Record<Exclude<RailItem, "settings">, string> = {
     diagrams: "Saved diagrams will appear here.",
 };
 
-export function SidePanel({ item, width }: { item: RailItem; width: number }) {
+/** The side panel for the rail item; `children`, when given, replace the placeholder content. */
+export function SidePanel({ item, width, children }: { item: RailItem; width: number; children?: ReactNode }) {
     const title = RAIL_COMMANDS[item].label;
     return (
         <section
@@ -26,8 +29,8 @@ export function SidePanel({ item, width }: { item: RailItem; width: number }) {
             className={styles.sidePanel}
             style={{ width }}
         >
-            <h2 className={styles.panelHeader}>{title}</h2>
-            {item === "settings" ? (
+            {children ?? <h2 className={styles.panelHeader}>{title}</h2>}
+            {children ? null : item === "settings" ? (
                 <ul className={styles.sectionList} aria-label="Settings sections">
                     <li>
                         <a className={styles.sectionLink} href="#settings-appearance">
@@ -37,6 +40,11 @@ export function SidePanel({ item, width }: { item: RailItem; width: number }) {
                     <li>
                         <a className={styles.sectionLink} href="#settings-editor">
                             Editor
+                        </a>
+                    </li>
+                    <li>
+                        <a className={styles.sectionLink} href="#settings-data-grid">
+                            Data grid
                         </a>
                     </li>
                 </ul>
@@ -111,7 +119,13 @@ export function BottomPanel({ layout, height }: { layout: LayoutState; height: n
                 className={styles.bottomContent}
                 hidden={collapsed}
             >
-                <p className={styles.placeholder}>Nothing here yet.</p>
+                {active === "Results" ? (
+                    <BottomResults />
+                ) : active === "Log" ? (
+                    <LogPanel />
+                ) : (
+                    <p className={styles.placeholder}>Nothing here yet.</p>
+                )}
             </div>
         </section>
     );
