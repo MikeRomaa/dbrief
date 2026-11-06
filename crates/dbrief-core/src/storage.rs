@@ -48,19 +48,35 @@ impl Storage {
 
     /// Reads a UI state value by key.
     pub async fn get_ui_state(&self, key: &str) -> Result<Option<String>, StorageError> {
-        let row = sqlx::query!("SELECT value FROM ui_state WHERE key = ?", key)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                value
+            FROM
+                ui_state
+            WHERE
+                key = ?
+            "#,
+            key
+        )
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(row.map(|r| r.value))
     }
 
     /// Inserts or replaces a UI state value.
     pub async fn set_ui_state(&self, key: &str, value: &str) -> Result<(), StorageError> {
         sqlx::query!(
-            "INSERT INTO ui_state (key, value) VALUES (?, ?)
-             ON CONFLICT(key) DO UPDATE SET
-               value = excluded.value,
-               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+            r#"
+            INSERT INTO
+                ui_state (key, value)
+            VALUES
+                (?, ?)
+            ON CONFLICT (key) DO UPDATE
+            SET
+                value = excluded.value,
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            "#,
             key,
             value
         )
@@ -85,10 +101,17 @@ mod tests {
         let storage = Storage::open(&data_dir).await.unwrap();
         assert!(data_dir.join(DB_FILE).exists());
 
-        let applied: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations")
-            .fetch_one(storage.pool())
-            .await
-            .unwrap();
+        let applied: i64 = sqlx::query_scalar(
+            r#"
+            SELECT
+                COUNT(*)
+            FROM
+                _sqlx_migrations
+            "#,
+        )
+        .fetch_one(storage.pool())
+        .await
+        .unwrap();
         assert_eq!(applied, MIGRATOR.iter().count() as i64);
         storage.close().await;
     }

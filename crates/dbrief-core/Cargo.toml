@@ -15,6 +15,7 @@ specta = { workspace = true, optional = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
 toml_edit = { workspace = true, features = ["serde"] }
+uuid = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
