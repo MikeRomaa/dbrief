@@ -65,6 +65,7 @@ export function PinnedCards({
                             >
                                 <div className={styles.cardTitle}>
                                     <EngineIcon engine={c.engine} size={16} />
+                                    {tag && <span className={controls.dot} style={{ background: tag }} />}
                                     <span className={styles.cardName}>{c.name}</span>
                                     <span className={styles.spacer} />
                                     <button
@@ -81,8 +82,7 @@ export function PinnedCards({
                                     </button>
                                 </div>
                                 <div className={styles.cardPath}>
-                                    <span className={styles.ellipsis}>{path || "Top level"}</span>
-                                    {tag && <span className={controls.dot} style={{ background: tag }} />}
+                                    <span className={styles.ellipsis}>{path}</span>
                                 </div>
                                 <div className={styles.cardMeta}>
                                     <span className={controls.badge} data-level={c.access_level}>

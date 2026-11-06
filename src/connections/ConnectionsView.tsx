@@ -19,11 +19,12 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
+import { ConnectionFormDialog, type FormStart } from "@/connections/ConnectionFormDialog";
 import { ConnectionInspector, EmptyInspector, FolderInspector } from "@/connections/ConnectionInspector";
 import { ConnectionTable } from "@/connections/ConnectionTable";
 import { FolderNameDialog, RemoveDialog, SecretPrompt } from "@/connections/dialogs";
 import { PinnedCards } from "@/connections/PinnedCards";
-import type { ConnectionsState } from "@/connections/useConnections";
+import type { ConnectionsState } from "@/hooks/useConnections";
 import { ActionFailure, backend, type Credentials } from "@/lib/backend";
 import type { SecretKind } from "@/lib/bindings";
 import {
@@ -52,6 +53,7 @@ const SECRET_FIELDS: Record<SecretKind, keyof Credentials> = {
 };
 
 type DialogState =
+    | { kind: "form"; connection: Connection | null; start: FormStart }
     | { kind: "new-folder"; parentId: string | null }
     | { kind: "rename-folder"; id: string; name: string }
     | { kind: "remove"; item: ItemRef; name: string }
@@ -132,7 +134,7 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
 
     const move = (m: Move) => run(() => backend.moveItem(m.item, m.parentId, m.before));
     const setPinned = (id: string, pinned: boolean) => run(() => backend.setPinned(id, pinned));
-    const update = (c: Connection) => run(() => backend.updateConnection(c));
+    const update = (c: Connection) => run(() => backend.updateConnection(c.id, c));
 
     const askRemove = (item: ItemRef) => {
         const name = item.kind === "folder" ? index.folders.get(item.id)?.name : index.connections.get(item.id)?.name;
@@ -179,6 +181,7 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
             connected.has(c.id)
                 ? { label: "Disconnect", icon: <Unplug size={14} />, onSelect: () => void disconnect(c.id) }
                 : { label: "Connect", icon: <Plug size={14} />, onSelect: () => void connect(c) },
+            { label: "Edit", icon: <Pencil size={14} />, onSelect: () => edit(c) },
             { label: "Duplicate", icon: <Copy size={14} />, onSelect: () => void duplicate(c.id) },
             c.pinned
                 ? { label: "Unpin", icon: <PinOff size={14} />, onSelect: () => void setPinned(c.id, false) }
@@ -193,8 +196,27 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
         ];
     };
 
+    /** New connections go in the selected folder, or next to the selected connection. */
+    const newConnection = (start: Partial<FormStart> = {}) =>
+        setDialog({
+            kind: "form",
+            connection: null,
+            start: {
+                engine: "postgres",
+                folderId: selectedFolder?.id ?? selectedConnection?.folder_id ?? null,
+                ...start,
+            },
+        });
+
+    const edit = (c: Connection) =>
+        setDialog({ kind: "form", connection: c, start: { engine: c.engine, folderId: c.folder_id } });
+
     const newMenu: MenuEntry[] = [
-        { label: "PostgreSQL", icon: <EngineIcon engine="postgres" size={15} />, disabled: true, onSelect: () => {} },
+        {
+            label: "PostgreSQL",
+            icon: <EngineIcon engine="postgres" size={15} />,
+            onSelect: () => newConnection({ engine: "postgres" }),
+        },
         {
             label: "SQLite",
             icon: <EngineIcon engine="sqlite" size={15} />,
@@ -202,7 +224,7 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
             onSelect: () => void openSqliteFile(),
         },
         "separator",
-        { label: "From connection URL", icon: <Link size={14} />, disabled: true, onSelect: () => {} },
+        { label: "From connection URL", icon: <Link size={14} />, onSelect: () => newConnection({ urlMode: true }) },
         { label: "Import from file", icon: <FileUp size={14} />, disabled: true, onSelect: () => {} },
     ];
 
@@ -257,11 +279,20 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
                         <FolderPlus size={13} />
                         New folder
                     </button>
-                    <MenuButton label="New connection" entries={newMenu} align="end" className={controls.primary}>
-                        <Plus size={12} />
-                        New connection
-                        <ChevronDown size={12} />
-                    </MenuButton>
+                    <span className={styles.split}>
+                        <button type="button" className={controls.primary} onClick={() => newConnection()}>
+                            <Plus size={12} />
+                            New connection
+                        </button>
+                        <MenuButton
+                            label="More ways to add a connection"
+                            entries={newMenu}
+                            align="end"
+                            className={`${controls.primary} ${styles.splitChevron}`}
+                        >
+                            <ChevronDown size={14} strokeWidth={2} />
+                        </MenuButton>
+                    </span>
                 </header>
 
                 {state.error && (
@@ -283,14 +314,14 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
                         <div className={styles.empty}>
                             <p className={styles.emptyTitle}>No connections yet</p>
                             <p className={styles.emptyText}>
-                                Open a SQLite file, or create folders to organize the connections you add.
+                                Add a PostgreSQL server or open a SQLite file. Folders keep them organized.
                             </p>
                             <div className={styles.inspectorButtons}>
-                                <button
-                                    type="button"
-                                    className={controls.primary}
-                                    onClick={() => void openSqliteFile()}
-                                >
+                                <button type="button" className={controls.primary} onClick={() => newConnection()}>
+                                    <Plus size={12} />
+                                    New connection
+                                </button>
+                                <button type="button" className={controls.button} onClick={() => void openSqliteFile()}>
                                     <EngineIcon engine="sqlite" size={13} />
                                     Open SQLite file
                                 </button>
@@ -381,6 +412,7 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
                     home={home}
                     onConnect={() => void connect(selectedConnection)}
                     onDisconnect={() => void disconnect(selectedConnection.id)}
+                    onEdit={() => edit(selectedConnection)}
                     onDuplicate={() => void duplicate(selectedConnection.id)}
                     onChange={(c) => void update(c)}
                     onRemove={() => askRemove({ kind: "connection", id: selectedConnection.id })}
@@ -437,6 +469,22 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
                                 );
                             }
                         }
+                    }}
+                />
+            )}
+            {dialog?.kind === "form" && (
+                <ConnectionFormDialog
+                    connection={dialog.connection}
+                    start={dialog.start}
+                    tree={tree}
+                    persistentSecrets={state.persistentSecrets}
+                    onClose={() => setDialog(null)}
+                    onSaved={(saved, connectWith, warning) => {
+                        setDialog(null);
+                        setSelected({ kind: "connection", id: saved.id });
+                        if (warning) state.report(warning);
+                        if (connectWith) void connect(saved, connectWith);
+                        else void state.reload();
                     }}
                 />
             )}

@@ -3,7 +3,7 @@ import { LucideProvider } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ConnectionsView } from "@/connections/ConnectionsView";
-import { useConnections } from "@/connections/useConnections";
+import { useConnections } from "@/hooks/useConnections";
 import { useFirstLaunch } from "@/hooks/useFirstLaunch";
 import { useLayout } from "@/hooks/useLayout";
 import { useSettings } from "@/hooks/useSettings";

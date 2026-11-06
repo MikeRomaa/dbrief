@@ -1,17 +1,15 @@
 import { Folder, FolderPlus, Pencil, Plug, Trash2, Unplug } from "lucide-react";
 
-import type { AccessLevel } from "@/lib/bindings";
 import { ACCESS_DESCRIPTIONS, ACCESS_LABELS, engineLabel, locationLabel, plural } from "@/lib/connectionFormat";
 import { type Connection, type FolderNode, folderPath, type TreeIndex } from "@/lib/connectionTree";
-import { handleRovingKeyDown } from "@/lib/roving";
-import { tooltip } from "@/shell/TooltipLayer";
 import { EngineIcon } from "@/ui/EngineIcon";
+import { Segmented } from "@/ui/Segmented";
 import { Switch } from "@/ui/Switch";
 
 import styles from "@/connections/ConnectionsView.module.css";
 import controls from "@/ui/controls.module.css";
 
-const LEVELS: AccessLevel[] = ["ro", "rw", "ddl"];
+const ACCESS_OPTIONS = (["ro", "rw", "ddl"] as const).map((value) => ({ value, label: ACCESS_LABELS[value] }));
 
 interface ConnectionInspectorProps {
     connection: Connection;
@@ -21,6 +19,7 @@ interface ConnectionInspectorProps {
     home: string | null;
     onConnect: () => void;
     onDisconnect: () => void;
+    onEdit: () => void;
     onDuplicate: () => void;
     onChange: (connection: Connection) => void;
     onRemove: () => void;
@@ -34,6 +33,7 @@ export function ConnectionInspector({
     home,
     onConnect,
     onDisconnect,
+    onEdit,
     onDuplicate,
     onChange,
     onRemove,
@@ -80,12 +80,7 @@ export function ConnectionInspector({
                             {connecting ? "Connecting…" : "Connect"}
                         </button>
                     )}
-                    <button
-                        type="button"
-                        className={controls.button}
-                        disabled
-                        {...tooltip("Editing arrives with the connection form")}
-                    >
+                    <button type="button" className={controls.button} onClick={onEdit}>
                         Edit
                     </button>
                     <button type="button" className={controls.button} onClick={onDuplicate}>
@@ -98,33 +93,14 @@ export function ConnectionInspector({
                 <h3 id="access-label" className={controls.sectionLabel}>
                     Access
                 </h3>
-                <div
-                    role="radiogroup"
-                    aria-labelledby="access-label"
-                    aria-describedby="access-description"
-                    className={styles.segmented}
-                    onKeyDown={(e) => {
-                        const el = handleRovingKeyDown(e, '[role="radio"]', "horizontal");
-                        const level = LEVELS.find((l) => l === el?.dataset.level);
-                        if (level) onChange({ ...c, access_level: level });
-                    }}
-                >
-                    {LEVELS.map((level) => (
-                        // biome-ignore lint/a11y/useSemanticElements: segmented control; follows the WAI-ARIA radio group pattern, like ThemePicker.
-                        <button
-                            key={level}
-                            type="button"
-                            role="radio"
-                            data-level={level}
-                            aria-checked={c.access_level === level}
-                            tabIndex={c.access_level === level ? 0 : -1}
-                            className={styles.segment}
-                            onClick={() => onChange({ ...c, access_level: level })}
-                        >
-                            {ACCESS_LABELS[level]}
-                        </button>
-                    ))}
-                </div>
+                <Segmented
+                    value={c.access_level}
+                    options={ACCESS_OPTIONS}
+                    labelledBy="access-label"
+                    describedBy="access-description"
+                    fill
+                    onChange={(level) => onChange({ ...c, access_level: level })}
+                />
                 <p id="access-description" className={styles.inspectorNote}>
                     {ACCESS_DESCRIPTIONS[c.access_level]}
                     {connected && " Open sessions keep their level until they reconnect."}

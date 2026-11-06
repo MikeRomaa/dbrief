@@ -190,6 +190,8 @@
     align-items: center;
     gap: 6px;
     min-width: 0;
+    /* One line tall even when empty (no folder, no tag), so pinned cards line up. */
+    min-height: 15px;
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
 }
@@ -577,35 +579,6 @@
     text-wrap: pretty;
 }
 
-.segmented {
-    display: flex;
-    height: 24px;
-    border: 1px solid var(--color-border);
-    overflow: hidden;
-}
-
-.segment {
-    flex: 1;
-    border: 0;
-    background: transparent;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-}
-
-.segment + .segment {
-    border-left: 1px solid var(--color-border);
-}
-
-.segment:hover {
-    background: var(--color-hover);
-}
-
-.segment[aria-checked="true"] {
-    background: var(--color-selected);
-    color: var(--color-text);
-    font-weight: 600;
-}
-
 .details {
     display: grid;
     grid-template-columns: 76px minmax(0, 1fr);
@@ -686,4 +659,15 @@
 
 .checkbox input {
     accent-color: var(--color-text);
+}
+
+/* "New connection" with a separate chevron for the menu, as one split button. */
+.split {
+    display: flex;
+}
+
+.splitChevron {
+    width: 24px;
+    padding: 0;
+    border-left-color: var(--color-bg);
 }

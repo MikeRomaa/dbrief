@@ -2,6 +2,7 @@ import {
     type ActionError,
     type Connected_Serialize,
     type Connection_Serialize,
+    type ConnectionInput_Deserialize,
     type ConnectionTree_Serialize,
     type Credentials_Deserialize,
     commands,
@@ -12,9 +13,12 @@ import {
     type Removed,
     type Saved_Serialize,
     type SavedSecrets,
+    type SecretChanges_Deserialize,
     type SessionInfo,
     type Settings_Serialize,
     type SettingsResponse_Serialize,
+    type TestResult,
+    type UrlParts_Serialize,
 } from "@/lib/bindings";
 
 export type Settings = Settings_Serialize;
@@ -76,8 +80,22 @@ export const backend = {
     createFolder: (name: string, parentId: string | null): Promise<Folder_Serialize> =>
         unwrapAction(commands.createFolder(name, parentId)),
     renameFolder: (id: string, name: string): Promise<null> => unwrapAction(commands.renameFolder(id, name)),
-    updateConnection: (connection: Connection_Serialize): Promise<Saved_Serialize> =>
-        unwrapAction(commands.updateConnection(connection.id, connection, {})),
+    createConnection: (
+        input: ConnectionInput_Deserialize,
+        secrets: SecretChanges_Deserialize,
+    ): Promise<Saved_Serialize> => unwrapAction(commands.createConnection(input, secrets)),
+    updateConnection: (
+        id: string,
+        input: ConnectionInput_Deserialize,
+        secrets: SecretChanges_Deserialize = {},
+    ): Promise<Saved_Serialize> => unwrapAction(commands.updateConnection(id, input, secrets)),
+    testConnection: (
+        id: string | null,
+        input: ConnectionInput_Deserialize,
+        prompted: Credentials,
+    ): Promise<TestResult> => unwrapAction(commands.testConnection(id, input, prompted)),
+    parseConnectionUrl: (text: string): Promise<UrlParts_Serialize> => unwrapAction(commands.parseConnectionUrl(text)),
+    buildConnectionUrl: (input: ConnectionInput_Deserialize): Promise<string> => commands.buildConnectionUrl(input),
     duplicateConnection: (id: string): Promise<Saved_Serialize> => unwrapAction(commands.duplicateConnection(id)),
     moveItem: (item: ItemRef, parentId: string | null, before: ItemRef | null): Promise<null> =>
         unwrapAction(commands.moveItem(item, parentId, before)),

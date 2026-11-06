@@ -46,7 +46,7 @@
     --tag-orange: #e07a1f;
     --tag-green: var(--color-added);
     --tag-blue: var(--color-changed);
-    --tag-purple: var(--syntax-keyword);
+    --tag-purple: #8a4fd6;
 }
 
 /* Contrast palette: warm neutrals, square corners, blue only for state and focus. */

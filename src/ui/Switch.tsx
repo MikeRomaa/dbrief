@@ -2,13 +2,14 @@ import styles from "@/ui/Switch.module.css";
 
 interface SwitchProps {
     label: string;
+    detail?: string;
     checked: boolean;
     disabled?: boolean;
     onChange: (checked: boolean) => void;
 }
 
 /** A labelled on/off switch row. */
-export function Switch({ label, checked, disabled, onChange }: SwitchProps) {
+export function Switch({ label, detail, checked, disabled, onChange }: SwitchProps) {
     return (
         <button
             type="button"
@@ -18,7 +19,10 @@ export function Switch({ label, checked, disabled, onChange }: SwitchProps) {
             disabled={disabled}
             onClick={() => onChange(!checked)}
         >
-            <span>{label}</span>
+            <span className={styles.text}>
+                {label}
+                {detail && <span className={styles.detail}>{detail}</span>}
+            </span>
             <span className={styles.track} data-on={checked || undefined}>
                 <span className={styles.thumb} />
             </span>

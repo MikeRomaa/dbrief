@@ -1,5 +1,6 @@
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
+import { useCloseOnScroll, usePopoverPosition } from "@/hooks/usePopover";
 import { handleRovingKeyDown } from "@/lib/roving";
 
 import styles from "@/ui/Menu.module.css";
@@ -79,33 +80,12 @@ interface MenuProps {
     onClose: (refocus: boolean) => void;
 }
 
-const GAP = 4;
-const MARGIN = 8;
-
 function Menu({ label, anchor, align, entries, onClose }: MenuProps) {
     const ref = useRef<HTMLDivElement>(null);
-    const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
 
     // Fixed position, so scrolling containers never clip the menu.
-    useLayoutEffect(() => {
-        const menu = ref.current;
-        if (!menu) return;
-
-        const a = anchor.getBoundingClientRect();
-        const width = menu.offsetWidth;
-        const height = menu.offsetHeight;
-        let left = align === "end" ? a.right - width : a.left;
-        left = Math.min(Math.max(MARGIN, left), window.innerWidth - width - MARGIN);
-        let top = a.bottom + GAP;
-        if (top + height > window.innerHeight - MARGIN) {
-            top = Math.max(MARGIN, a.top - GAP - height);
-        }
-
-        setPosition({ left, top });
-    }, [anchor, align]);
-
-    const onCloseRef = useRef(onClose);
-    onCloseRef.current = onClose;
+    const position = usePopoverPosition(ref, anchor, align);
+    useCloseOnScroll(ref, () => onClose(false));
 
     // Focus the first item once the menu is placed; a hidden element can't take focus.
     const placed = position !== null;
@@ -114,16 +94,6 @@ function Menu({ label, anchor, align, entries, onClose }: MenuProps) {
             ref.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
         }
     }, [placed]);
-
-    useEffect(() => {
-        const close = () => onCloseRef.current(false);
-        window.addEventListener("resize", close);
-        window.addEventListener("wheel", close, { passive: true });
-        return () => {
-            window.removeEventListener("resize", close);
-            window.removeEventListener("wheel", close);
-        };
-    }, []);
 
     return (
         <div

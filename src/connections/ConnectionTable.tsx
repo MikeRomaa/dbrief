@@ -483,8 +483,8 @@ function ConnectionCells({
                 <span className={styles.nameCell} style={{ paddingLeft: indent }}>
                     <span className={styles.chevronSpace} />
                     <EngineIcon engine={c.engine} />
-                    <span className={styles.connectionName}>{c.name}</span>
                     {tag && <span className={controls.dot} style={{ background: tag }} />}
+                    <span className={styles.connectionName}>{c.name}</span>
                     {props.connected.has(c.id) && (
                         <span
                             className={controls.connectedDot}

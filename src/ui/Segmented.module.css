@@ -1,0 +1,39 @@
+.group {
+    display: inline-flex;
+    flex: none;
+    align-self: flex-start;
+    height: 24px;
+    border: 1px solid var(--color-border);
+}
+
+.group[data-fill] {
+    display: flex;
+    align-self: stretch;
+}
+
+.segment {
+    padding: 0 10px;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+}
+
+.segment + .segment {
+    border-left: 1px solid var(--color-border);
+}
+
+.group[data-fill] .segment {
+    flex: 1;
+}
+
+.segment:hover {
+    background: var(--color-hover);
+}
+
+.segment[aria-checked="true"] {
+    background: var(--color-selected);
+    color: var(--color-text);
+    font-weight: 600;
+}

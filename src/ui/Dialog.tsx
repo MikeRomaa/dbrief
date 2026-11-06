@@ -1,4 +1,6 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useId } from "react";
+
+import { Modal } from "@/ui/Modal";
 
 import styles from "@/ui/Dialog.module.css";
 
@@ -11,48 +13,26 @@ interface DialogProps {
     width?: number;
 }
 
-/**
- * A modal dialog on the native `<dialog>` element, which traps focus, closes on Esc, and returns
- * focus to where it was.
- */
+/** A small modal dialog: title, body and footer buttons, as a form so Enter submits. */
 export function Dialog({ title, onClose, onSubmit, children, footer, width = 420 }: DialogProps) {
-    const ref = useRef<HTMLDialogElement>(null);
-
-    useEffect(() => {
-        const dialog = ref.current;
-        const previous = document.activeElement as HTMLElement | null;
-        dialog?.showModal();
-
-        return () => {
-            dialog?.close();
-            previous?.focus();
-        };
-    }, []);
+    const titleId = useId();
 
     return (
-        <dialog
-            ref={ref}
-            className={styles.dialog}
-            style={{ width }}
-            aria-labelledby="dialog-title"
-            onCancel={(e) => {
-                e.preventDefault();
-                onClose();
-            }}
-        >
+        <Modal labelledBy={titleId} onClose={onClose}>
             <form
                 className={styles.form}
+                style={{ width }}
                 onSubmit={(e) => {
                     e.preventDefault();
                     onSubmit?.();
                 }}
             >
-                <h2 id="dialog-title" className={styles.title}>
+                <h2 id={titleId} className={styles.title}>
                     {title}
                 </h2>
                 <div className={styles.body}>{children}</div>
                 <div className={styles.footer}>{footer}</div>
             </form>
-        </dialog>
+        </Modal>
     );
 }

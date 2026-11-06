@@ -1,0 +1,370 @@
+/* Add connection modal, after the mockup: engine list on the left, sections on the right. */
+
+.dialog {
+    width: 880px;
+    margin-top: 70px;
+}
+
+.frame {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 102px);
+}
+
+.header {
+    flex: none;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 8px 0 20px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+    margin: 0;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.spacer {
+    flex: 1;
+}
+
+.body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+/* Engine list */
+
+.engines {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    width: 220px;
+    padding: 8px 0;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface);
+}
+
+.enginesLabel {
+    padding: 6px 12px 8px;
+}
+
+.engine {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 44px;
+    padding: 0 12px;
+    border: 0;
+    background: transparent;
+    text-align: left;
+}
+
+.engine:hover:not(:disabled) {
+    background: var(--color-hover);
+}
+
+.engine[aria-pressed="true"] {
+    background: var(--color-selected);
+}
+
+.engine:disabled {
+    opacity: 0.4;
+}
+
+.engineText {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.engineName {
+    font-size: var(--font-size-sm);
+}
+
+.engine[aria-pressed="true"] .engineName {
+    font-weight: 600;
+}
+
+.engineDetail {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.rule {
+    width: 100%;
+    height: 1px;
+    margin: 8px 0;
+    border: 0;
+    background: var(--color-border);
+}
+
+.pasteUrl {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 36px;
+    padding: 0 12px;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    text-align: left;
+}
+
+.pasteUrl:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
+}
+
+/* Sections */
+
+.sections {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.sectionHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 24px;
+}
+
+.sectionTitle {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+.grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.row {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.grow1 {
+    flex: 1;
+}
+
+.grow2 {
+    flex: 2;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.field input,
+.textarea {
+    width: 100%;
+}
+
+.mono {
+    font-family: var(--font-mono);
+}
+
+.textarea {
+    height: auto;
+    padding: 6px 8px;
+    resize: vertical;
+}
+
+.inline {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.note {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+
+.fieldError {
+    font-size: var(--font-size-sm);
+    color: var(--color-error);
+}
+
+.rememberCell {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    height: 26px;
+}
+
+/* An input with a button inside its right edge (show password, Browse). */
+.withButton {
+    position: relative;
+    display: flex;
+}
+
+.withButton input {
+    padding-right: 56px;
+}
+
+.inlineButton,
+.inlineText {
+    position: absolute;
+    right: 1px;
+    top: 1px;
+    bottom: 1px;
+    display: grid;
+    place-items: center;
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.inlineButton:hover,
+.inlineText:hover {
+    color: var(--color-text);
+}
+
+.tags {
+    display: flex;
+    gap: 6px;
+}
+
+.tag {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+}
+
+.tag[aria-checked="true"] {
+    outline: 2px solid var(--color-text);
+    outline-offset: 1px;
+}
+
+.tag:focus-visible {
+    outline: 2px solid var(--color-changed);
+    outline-offset: 1px;
+}
+
+.advancedToggle {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 20px;
+    border: 0;
+    border-bottom: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    text-align: left;
+}
+
+.advancedToggle:hover {
+    background: var(--color-hover);
+}
+
+.advancedTitle {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.urlStrip {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: auto;
+    padding: 8px 12px 8px 20px;
+    background: var(--color-surface);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.urlText {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* Footer */
+
+.footer {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 52px;
+    padding: 0 12px 0 20px;
+    border-top: 1px solid var(--color-border);
+}
+
+.statusOk,
+.statusFailed,
+.statusNote {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+}
+
+.statusOk {
+    color: var(--color-added);
+}
+
+.statusFailed {
+    color: var(--color-error);
+}
+
+.statusNote {
+    color: var(--color-text-muted);
+}
+
+.statusFailed svg {
+    flex: none;
+}
+
+.statusText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -webkit-user-select: text;
+    user-select: text;
+}

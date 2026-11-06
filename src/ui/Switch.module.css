@@ -43,3 +43,13 @@
     height: 10px;
     background: var(--color-bg);
 }
+
+.text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.detail {
+    color: var(--color-text-muted);
+}
