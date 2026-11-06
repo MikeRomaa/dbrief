@@ -11,24 +11,13 @@ interface ThemePickerProps {
     describedBy?: string;
 }
 
-/** Mini window drawing used inside a theme card. "system" shows half light, half dark. */
+/** Small page drawing for a theme card. "system" shows half light, half dark. */
 function ThemePreview({ theme }: { theme: Theme }) {
     return (
         <span className={styles.preview} data-preview={theme} aria-hidden="true">
-            <span className={styles.previewHalf} data-tone="light">
-                <span className={styles.previewRail} />
-                <span className={styles.previewBody}>
-                    <span className={styles.previewLine} />
-                    <span className={styles.previewLine} data-short />
-                </span>
-            </span>
-            <span className={styles.previewHalf} data-tone="dark">
-                <span className={styles.previewRail} />
-                <span className={styles.previewBody}>
-                    <span className={styles.previewLine} />
-                    <span className={styles.previewLine} data-short />
-                </span>
-            </span>
+            <span className={styles.previewLine} />
+            <span className={styles.previewLine} data-faded />
+            <span className={styles.previewLine} data-faded data-short />
         </span>
     );
 }
@@ -65,7 +54,7 @@ export function ThemePicker({ value, onChange, labelledBy, describedBy }: ThemeP
                         onClick={() => onChange(theme.value)}
                     >
                         <ThemePreview theme={theme.value} />
-                        <span className={styles.cardLabel}>{theme.label}</span>
+                        <span>{theme.label}</span>
                     </button>
                 );
             })}

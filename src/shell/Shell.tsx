@@ -91,7 +91,7 @@ export function Shell() {
         };
 
         return (
-            <LucideProvider size={16} strokeWidth={1.5}>
+            <LucideProvider size={16} strokeWidth={1.75}>
                 <div className={styles.welcome}>
                     <TopBar />
                     <WelcomeScreen theme={settings?.appearance.theme} onThemeChange={setTheme} onDone={finishWelcome} />
@@ -107,7 +107,7 @@ export function Shell() {
 
     return (
         // One size and stroke for every icon in the shell.
-        <LucideProvider size={16} strokeWidth={1.5}>
+        <LucideProvider size={16} strokeWidth={1.75}>
             <CommandsContext value={registry}>
                 <div className={styles.shell}>
                     <TopBar />

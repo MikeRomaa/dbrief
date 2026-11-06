@@ -30,18 +30,18 @@ export function SettingsView({ theme, onThemeChange, scriptsFolder, onScriptsFol
 
     return (
         <div className={styles.view}>
-            <h1 className={styles.title}>Settings</h1>
+            <h1 className="visually-hidden">Settings</h1>
             <section id="settings-appearance" className={styles.section} aria-labelledby="settings-appearance-title">
                 <h2 id="settings-appearance-title" className={styles.sectionTitle}>
                     Appearance
                 </h2>
                 <div className={styles.setting}>
-                    <div id="theme-label" className={styles.settingLabel}>
-                        Theme
+                    <div className={styles.settingText}>
+                        <div id="theme-label">Theme</div>
+                        <p id="theme-description" className={styles.settingDescription}>
+                            System follows your operating system's light or dark setting.
+                        </p>
                     </div>
-                    <p id="theme-description" className={styles.settingDescription}>
-                        System follows your operating system's light or dark setting.
-                    </p>
                     <ThemePicker
                         value={theme}
                         onChange={onThemeChange}
@@ -55,25 +55,28 @@ export function SettingsView({ theme, onThemeChange, scriptsFolder, onScriptsFol
                     Editor
                 </h2>
                 <div className={styles.setting}>
-                    <div id="scripts-folder-label" className={styles.settingLabel}>
-                        Scripts folder
-                    </div>
-                    <p id="scripts-folder-description" className={styles.settingDescription}>
-                        Your SQL scripts are saved here as plain .sql files. The folder is created if it doesn't exist.
-                    </p>
-                    <FolderField
-                        value={scriptsFolder ?? ""}
-                        onChange={(path) => void changeScriptsFolder(path)}
-                        dialogTitle="Scripts folder"
-                        labelledBy="scripts-folder-label"
-                        describedBy="scripts-folder-description"
-                    />
-                    {folderError && (
-                        <p className={styles.error} role="alert">
-                            {folderError}
+                    <div className={styles.settingText}>
+                        <div id="scripts-folder-label">Scripts folder</div>
+                        <p id="scripts-folder-description" className={styles.settingDescription}>
+                            Your SQL scripts are saved here as plain .sql files. The folder is created if it doesn't
+                            exist.
                         </p>
-                    )}
+                    </div>
+                    <div className={styles.folderControl}>
+                        <FolderField
+                            value={scriptsFolder ?? ""}
+                            onChange={(path) => void changeScriptsFolder(path)}
+                            dialogTitle="Scripts folder"
+                            labelledBy="scripts-folder-label"
+                            describedBy="scripts-folder-description"
+                        />
+                    </div>
                 </div>
+                {folderError && (
+                    <p className={styles.error} role="alert">
+                        {folderError}
+                    </p>
+                )}
             </section>
         </div>
     );

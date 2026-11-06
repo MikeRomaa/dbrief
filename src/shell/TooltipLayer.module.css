@@ -8,11 +8,8 @@
     gap: 8px;
     max-width: 360px;
     padding: 3px 7px;
-    border: 1px solid var(--color-border-strong);
-    border-radius: var(--radius-sm);
-    background: var(--color-raised);
-    box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
-    color: var(--color-text);
+    background: var(--color-text);
+    color: var(--color-bg);
     font-size: var(--font-size-sm);
     line-height: 1.35;
     white-space: normal;
@@ -28,7 +25,7 @@
 
 .shortcut {
     flex: none;
-    color: var(--color-text-muted);
+    opacity: 0.65;
     font-size: var(--font-size-xs);
 }
 

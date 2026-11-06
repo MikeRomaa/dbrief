@@ -1,45 +1,52 @@
 .view {
-    max-width: 720px;
-    padding: 24px 32px;
+    max-width: 760px;
+    padding: 8px 40px 40px;
     user-select: text;
 }
 
-.title {
-    margin: 0 0 20px;
+.section {
+    padding-top: 28px;
+}
+
+.sectionTitle {
+    margin: 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--color-border-strong);
     font-size: var(--font-size-lg);
     font-weight: 600;
 }
 
-.sectionTitle {
-    margin: 0 0 12px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--color-border-strong);
-    font-size: var(--font-size-md);
-    font-weight: 600;
-}
-
 .setting {
-    padding: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--color-border);
 }
 
-.settingLabel {
-    font-weight: 500;
+.settingText {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .settingDescription {
-    margin: 2px 0 10px;
+    margin: 0;
     color: var(--color-text-muted);
     font-size: var(--font-size-sm);
+    text-wrap: pretty;
 }
 
-.section + .section {
-    margin-top: 40px;
+.folderControl {
+    flex: none;
+    width: 340px;
 }
 
 .error {
     margin: 8px 0 0;
     padding: 6px 10px;
-    border-radius: var(--radius-md);
     background: var(--color-error-bg);
     color: var(--color-error);
     font-size: var(--font-size-sm);

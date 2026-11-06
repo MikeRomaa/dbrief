@@ -1,4 +1,4 @@
-import { FileCode, History, ListTree, Plug, Settings, Workflow } from "lucide-react";
+import { Database, FileCode, History, Network, Settings2, Table } from "lucide-react";
 import type { ComponentType } from "react";
 
 import { type LayoutState, RAIL_ITEMS, type RailItem } from "@/lib/layout";
@@ -8,12 +8,12 @@ import { commandHints, RAIL_COMMANDS, useCommands } from "@/shell/shellCommands"
 import styles from "@/shell/ActivityRail.module.css";
 
 const ICONS: Record<RailItem, ComponentType<{ size?: number }>> = {
-    connections: Plug,
-    explorer: ListTree,
+    connections: Database,
+    explorer: Table,
     scripts: FileCode,
     history: History,
-    diagrams: Workflow,
-    settings: Settings,
+    diagrams: Network,
+    settings: Settings2,
 };
 
 export const railTabId = (item: RailItem) => `rail-tab-${item}`;
@@ -46,7 +46,7 @@ export function ActivityRail({ layout }: ActivityRailProps) {
                 onClick={() => commands.run(meta.id)}
                 {...commandHints(meta, "right")}
             >
-                <Icon size={18} />
+                <Icon size={17} />
             </button>
         );
     };

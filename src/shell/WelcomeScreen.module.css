@@ -58,20 +58,18 @@
 .primary {
     height: 28px;
     padding: 0 12px;
-    border: 1px solid var(--color-changed);
-    border-radius: var(--radius-md);
-    background: var(--color-changed);
+    border: 0;
+    background: var(--color-text);
     color: var(--color-bg);
     font-weight: 500;
 }
 
 .primary:hover {
-    filter: brightness(1.08);
+    opacity: 0.88;
 }
 
 .primary:disabled {
-    opacity: 0.5;
-    filter: none;
+    opacity: 0.4;
 }
 
 .primary:focus-visible {
@@ -81,7 +79,6 @@
 .error {
     margin: 0;
     padding: 6px 10px;
-    border-radius: var(--radius-md);
     background: var(--color-error-bg);
     color: var(--color-error);
     font-size: var(--font-size-sm);

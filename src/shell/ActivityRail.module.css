@@ -19,14 +19,12 @@
 }
 
 .item {
-    position: relative;
     display: grid;
     place-items: center;
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     border: 0;
-    border-radius: var(--radius-md);
     background: transparent;
     color: var(--color-text-muted);
 }
@@ -42,16 +40,4 @@
 
 .item[data-expanded="true"] {
     background: var(--color-selected);
-}
-
-/* Accent bar on the active item while its panel is open. */
-.item[data-expanded="true"]::before {
-    content: "";
-    position: absolute;
-    left: -5px;
-    top: 8px;
-    bottom: 8px;
-    width: 2px;
-    border-radius: 1px;
-    background: var(--color-changed);
 }

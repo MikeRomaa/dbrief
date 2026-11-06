@@ -14,7 +14,7 @@ body,
 body {
     font-family: var(--font-ui);
     font-size: var(--font-size-md);
-    line-height: 1.4;
+    line-height: 1.35;
     color: var(--color-text);
     background: var(--color-bg);
     overflow: hidden;
@@ -42,7 +42,6 @@ pre {
 :where(:focus-visible) {
     outline: 2px solid var(--color-changed);
     outline-offset: -2px;
-    border-radius: var(--radius-sm);
 }
 
 .visually-hidden {

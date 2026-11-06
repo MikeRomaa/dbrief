@@ -1,13 +1,14 @@
 .statusBar {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 16px;
     height: 24px;
     padding: 0 4px;
+    font-family: var(--font-mono);
     background: var(--color-surface);
     border-top: 1px solid var(--color-border);
     color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-2xs);
     white-space: nowrap;
 }
 
@@ -28,7 +29,6 @@
     min-width: 0;
     max-width: 60vw;
     padding: 0 6px;
-    border-radius: var(--radius-sm);
     background: var(--color-warning-bg);
     color: var(--color-warning);
 }
@@ -54,7 +54,6 @@
     height: 20px;
     padding: 0;
     border: 0;
-    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--color-text-faint);
 }

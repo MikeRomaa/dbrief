@@ -33,8 +33,8 @@ describe("clamping", () => {
 
     it("keeps the bottom panel between its minimum and the window", () => {
         expect(clampBottomPanelHeight(10)).toBe(SIZES.bottomPanel.min);
-        // 800 - 34 top - 24 status - 120 editor = 622
-        expect(clampBottomPanelHeight(5000, 800)).toBe(622);
+        // 800 - 36 top - 24 status - 120 editor = 620
+        expect(clampBottomPanelHeight(5000, 800)).toBe(620);
     });
 
     it("renders a collapsed bottom panel at 30px", () => {

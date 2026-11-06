@@ -6,21 +6,20 @@
 .path {
     flex: 1;
     min-width: 0;
-    height: 28px;
+    height: 26px;
     padding: 0 8px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-surface);
+    background: var(--color-bg);
     font-family: var(--font-mono);
     font-size: var(--font-size-sm);
 }
 
 .choose {
-    height: 28px;
-    padding: 0 12px;
-    border: 1px solid var(--color-border-strong);
-    border-radius: var(--radius-md);
-    background: var(--color-raised);
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--color-text);
+    background: transparent;
+    font-size: var(--font-size-sm);
     font-weight: 500;
 }
 

@@ -59,7 +59,7 @@ Fixed regions:
 
 | Region        | Size                         | Purpose                                                                                                                     |
 | ------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Top bar       | 34px                         | Custom title bar: app name, breadcrumb, window controls (native traffic lights on macOS). Drags the window.                 |
+| Top bar       | 36px                         | Custom title bar: app name, breadcrumb, window controls (native traffic lights on macOS). Drags the window.                 |
 | Activity rail | 44px                         | Switches the side panel: Connections, Explorer, Scripts, History, Diagrams, Settings                                        |
 | Side panel    | 248px (resizable 200 to 420) | Whatever the rail selects                                                                                                   |
 | Editor groups | flex, min 320px each         | Tabs hold tables, scripts, structure, diagrams. Up to two groups, side by side or stacked. Drag a tab to the edge to split. |

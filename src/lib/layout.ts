@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /** Fixed shell sizes in px. */
 export const SIZES = {
-    topBar: 34,
+    topBar: 36,
     rail: 44,
     statusBar: 24,
     sidePanel: { default: 248, min: 200, max: 420 },

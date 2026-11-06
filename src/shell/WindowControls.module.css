@@ -3,11 +3,11 @@
     align-self: stretch;
 }
 
-/* Square: the title bar is 34px including its 1px bottom border, so buttons are 33×33. */
+/* Square: the title bar is 36px including its 1px bottom border, so buttons are 35×35. */
 .button {
     display: grid;
     place-items: center;
-    width: 33px;
+    width: 35px;
     padding: 0;
     border: 0;
     background: transparent;
@@ -27,5 +27,4 @@
 
 .button:focus-visible {
     outline-offset: -2px;
-    border-radius: 0;
 }

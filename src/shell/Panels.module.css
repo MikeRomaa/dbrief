@@ -19,9 +19,9 @@
     height: 32px;
     line-height: 32px;
     flex: none;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-2xs);
     font-weight: 600;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-text-muted);
 }
@@ -34,15 +34,17 @@
 
 .sectionList {
     margin: 0;
-    padding: 0 6px;
+    padding: 0 0 8px;
     list-style: none;
 }
 
 .sectionLink {
-    display: block;
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 16px;
     color: var(--color-text);
+    font-size: var(--font-size-sm);
     text-decoration: none;
 }
 
@@ -52,6 +54,7 @@
 
 .sectionLink[aria-current="true"] {
     background: var(--color-selected);
+    font-weight: 600;
 }
 
 .bottomPanel {
@@ -67,7 +70,7 @@
     display: flex;
     align-items: center;
     height: 29px;
-    padding: 0 4px 0 6px;
+    padding: 0 4px 0 12px;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
 }
@@ -75,13 +78,12 @@
 .bottomTabs {
     flex: 1;
     display: flex;
-    gap: 2px;
+    gap: 18px;
     height: 100%;
 }
 
 .bottomTab {
-    position: relative;
-    padding: 0 8px;
+    padding: 0;
     border: 0;
     background: transparent;
     color: var(--color-text-muted);
@@ -94,16 +96,7 @@
 
 .bottomTab[aria-selected="true"] {
     color: var(--color-text);
-}
-
-.bottomTab[aria-selected="true"]::after {
-    content: "";
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    bottom: 0;
-    height: 2px;
-    background: var(--color-changed);
+    font-weight: 600;
 }
 
 .iconButton {
@@ -113,7 +106,6 @@
     height: 22px;
     padding: 0;
     border: 0;
-    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--color-text-muted);
 }
