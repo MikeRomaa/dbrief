@@ -33,7 +33,7 @@ Users can create, organize, save and connect to PostgreSQL and SQLite databases.
 ## Design decisions
 
 - **Identity:** every folder and connection has a UUID. Names are labels and don't need to be unique.
-- **Secrets:** stored with the `keyring` crate (macOS Keychain, Windows Credential Manager, Linux Secret Service). Entry key: `dbrief/<connection-id>/<kind>`, where kind is `password`, `ssh-password` or `ssh-passphrase`. The app database never stores secrets.
+- **Secrets:** stored with the `keyring` crate (macOS Keychain, Windows Credential Manager, Linux Secret Service). Entries use service `dbrief` and account `<connection-id>/<kind>`, where kind is `password`, `ssh-password`, or `ssh-passphrase`. The app database never stores secrets.
 - **No credential store:** detected at startup; secrets are asked for on connect and kept in memory only for that app session.
 - **Drivers:** sqlx for PostgreSQL and SQLite.
 - **SSH:** `russh` opens a local port forward through the bastion; sqlx connects to `127.0.0.1:<local port>`. `~/.ssh/config` is parsed for host aliases (HostName, User, Port, IdentityFile, ProxyJump not supported at first).

@@ -305,3 +305,87 @@ async fn rename_folder() {
     assert_eq!(repo.folders().await.unwrap()[0].name, "new");
     assert!(repo.rename_folder(Uuid::new_v4(), "x").await.is_err());
 }
+
+mod remove {
+    use super::*;
+    use crate::secrets::{MemoryStore, SecretKind, SecretStore, Secrets, SecretsError};
+
+    fn memory_secrets() -> Secrets {
+        Secrets::new(Box::new(MemoryStore::default()), false)
+    }
+
+    #[tokio::test]
+    async fn removing_a_folder_deletes_secrets_of_nested_connections_only() {
+        let (_dir, repo) = repo().await;
+        let secrets = memory_secrets();
+
+        let outer = repo.create_folder("outer", None).await.unwrap();
+        let inner = repo.create_folder("inner", Some(outer.id)).await.unwrap();
+        let a = repo
+            .create_connection(sqlite("a", Some(outer.id)))
+            .await
+            .unwrap();
+        let b = repo
+            .create_connection(sqlite("b", Some(inner.id)))
+            .await
+            .unwrap();
+        let keep = repo.create_connection(sqlite("keep", None)).await.unwrap();
+        for id in [a.id, b.id, keep.id] {
+            secrets.set(id, SecretKind::Password, "pw").unwrap();
+            secrets
+                .set(id, SecretKind::SshPassphrase, "phrase")
+                .unwrap();
+        }
+
+        let removed = super::super::remove(&repo, &secrets, ItemRef::Folder(outer.id))
+            .await
+            .unwrap();
+
+        assert_eq!(removed.connections.len(), 2);
+        assert!(removed.secret_errors.is_empty());
+        for id in [a.id, b.id] {
+            for kind in SecretKind::ALL {
+                assert_eq!(secrets.get(id, kind).unwrap(), None);
+            }
+        }
+        assert_eq!(
+            secrets
+                .get(keep.id, SecretKind::Password)
+                .unwrap()
+                .as_deref(),
+            Some("pw")
+        );
+    }
+
+    /// A store whose deletes always fail.
+    struct BrokenStore;
+
+    impl SecretStore for BrokenStore {
+        fn get(&self, _: Uuid, _: SecretKind) -> Result<Option<String>, SecretsError> {
+            Ok(None)
+        }
+
+        fn set(&self, _: Uuid, _: SecretKind, _: &str) -> Result<(), SecretsError> {
+            Ok(())
+        }
+
+        fn delete(&self, _: Uuid, _: SecretKind) -> Result<(), SecretsError> {
+            Err(SecretsError::Store("locked".into()))
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failing_store_still_removes_the_connection() {
+        let (_dir, repo) = repo().await;
+        let secrets = Secrets::new(Box::new(BrokenStore), true);
+        let a = repo.create_connection(sqlite("a", None)).await.unwrap();
+
+        let removed = super::super::remove(&repo, &secrets, ItemRef::Connection(a.id))
+            .await
+            .unwrap();
+
+        assert_eq!(removed.connections, [a.id]);
+        assert_eq!(removed.secret_errors.len(), 1);
+        assert!(repo.connections().await.unwrap().is_empty());
+    }
+}
