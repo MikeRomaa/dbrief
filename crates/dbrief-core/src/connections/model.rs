@@ -61,6 +61,7 @@ text_enum!(
     /// PostgreSQL `sslmode`.
     SslMode {
         Disable => "disable",
+        Allow => "allow",
         Prefer => "prefer",
         Require => "require",
         VerifyCa => "verify-ca",
