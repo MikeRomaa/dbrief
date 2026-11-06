@@ -1,0 +1,48 @@
+.vertical,
+.horizontal {
+    position: relative;
+    flex: none;
+    z-index: 2;
+    background: var(--color-border);
+    touch-action: none;
+}
+
+.vertical {
+    width: 1px;
+    cursor: col-resize;
+}
+
+.horizontal {
+    height: 1px;
+    cursor: row-resize;
+}
+
+/* Wider invisible hit area around the 1px line. */
+.vertical::before,
+.horizontal::before {
+    content: "";
+    position: absolute;
+}
+
+.vertical::before {
+    inset: 0 -3px;
+}
+
+.horizontal::before {
+    inset: -3px 0;
+}
+
+.vertical:hover,
+.horizontal:hover,
+.vertical:active,
+.horizontal:active {
+    background: var(--color-changed);
+    transition: background var(--transition-fast);
+}
+
+.vertical:focus-visible,
+.horizontal:focus-visible {
+    outline: none;
+    background: var(--color-changed);
+    box-shadow: 0 0 0 1px var(--color-changed);
+}

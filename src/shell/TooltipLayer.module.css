@@ -1,0 +1,39 @@
+.tooltip {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 360px;
+    padding: 3px 7px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-raised);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.tooltip[data-ready="true"] {
+    visibility: visible;
+    animation: fade-in 100ms ease-out;
+}
+
+.shortcut {
+    flex: none;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+}

@@ -1,0 +1,123 @@
+.view {
+    max-width: 720px;
+    padding: 24px 32px;
+    user-select: text;
+}
+
+.title {
+    margin: 0 0 20px;
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+}
+
+.sectionTitle {
+    margin: 0 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--color-border-strong);
+    font-size: var(--font-size-md);
+    font-weight: 600;
+}
+
+.setting {
+    padding: 8px 0;
+}
+
+.settingLabel {
+    font-weight: 500;
+}
+
+.settingDescription {
+    margin: 2px 0 10px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.cards {
+    display: flex;
+    gap: 12px;
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 148px;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-raised);
+    text-align: left;
+}
+
+.card:hover {
+    border-color: var(--color-border-strong);
+}
+
+.card[aria-checked="true"] {
+    border-color: var(--color-changed);
+    box-shadow: 0 0 0 1px var(--color-changed);
+}
+
+.card:focus-visible {
+    outline-offset: 2px;
+}
+
+.cardLabel {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
+/* Theme preview: fixed colors so each card shows its theme regardless of the current one. */
+.preview {
+    display: flex;
+    height: 72px;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+
+.previewHalf {
+    flex: 1;
+    display: flex;
+}
+
+.previewHalf[data-tone="light"] {
+    --p-bg: #ffffff;
+    --p-sf: #eceef2;
+    --p-line: #c7ccd4;
+}
+
+.previewHalf[data-tone="dark"] {
+    --p-bg: #15171b;
+    --p-sf: #24282f;
+    --p-line: #4a515c;
+}
+
+.preview[data-preview="light"] .previewHalf[data-tone="dark"],
+.preview[data-preview="dark"] .previewHalf[data-tone="light"] {
+    display: none;
+}
+
+.previewRail {
+    width: 14px;
+    background: var(--p-sf);
+}
+
+.previewBody {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 8px;
+    background: var(--p-bg);
+}
+
+.previewLine {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--p-line);
+}
+
+.previewLine[data-short] {
+    width: 60%;
+}

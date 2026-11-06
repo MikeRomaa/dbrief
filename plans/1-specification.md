@@ -29,12 +29,12 @@ Source: Claude Design project "SQL Editor Views" (round 1), built on the **Contr
 
 ## Data storage
 
-| Data | Where |
-|---|---|
+| Data                                                  | Where                                           |
+| ----------------------------------------------------- | ----------------------------------------------- |
 | Connections, folders, history, schema cache, diagrams | Local SQLite database in the app data directory |
-| Settings | `settings.toml` in the app data directory |
-| Passwords and SSH secrets | OS credential store (see Connections) |
-| Scripts | Plain `.sql` files in a folder on disk |
+| Settings                                              | `settings.toml` in the app data directory       |
+| Passwords and SSH secrets                             | OS credential store (see Connections)           |
+| Scripts                                               | Plain `.sql` files in a folder on disk          |
 
 ## Updates
 
@@ -55,18 +55,17 @@ Then the app opens the Connections view.
 
 The app uses a **single window**. The two editor groups cover side-by-side work.
 
-
 Fixed regions:
 
-| Region | Size | Purpose |
-|---|---|---|
-| Top bar | 36px | Sidebar toggle, breadcrumb, search (⌘P), layout toggles |
-| Activity rail | 44px | Switches the side panel: Connections, Explorer, Scripts, History, Diagrams, Settings |
-| Side panel | 248px (resizable 200 to 420) | Whatever the rail selects |
-| Editor groups | flex, min 320px each | Tabs hold tables, scripts, structure, diagrams. Up to two groups, side by side or stacked. Drag a tab to the edge to split. |
-| Bottom panel | 220px, collapses to 30px | Results, Staged changes, Log, History. Shared by all groups. |
-| Inspector | 300px, optional | Context for the selection: cell value, row details, object properties, connection settings |
-| Status bar | 24px | Connection, access level, cursor position, staged count, encoding |
+| Region        | Size                         | Purpose                                                                                                                     |
+| ------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Top bar       | 34px                         | Custom title bar: app name, breadcrumb, window controls (native traffic lights on macOS). Drags the window.                 |
+| Activity rail | 44px                         | Switches the side panel: Connections, Explorer, Scripts, History, Diagrams, Settings                                        |
+| Side panel    | 248px (resizable 200 to 420) | Whatever the rail selects                                                                                                   |
+| Editor groups | flex, min 320px each         | Tabs hold tables, scripts, structure, diagrams. Up to two groups, side by side or stacked. Drag a tab to the edge to split. |
+| Bottom panel  | 220px, collapses to 30px     | Results, Staged changes, Log, History. Shared by all groups.                                                                |
+| Inspector     | 300px, optional              | Context for the selection: cell value, row details, object properties, connection settings                                  |
+| Status bar    | 24px                         | Panel toggles (side panel on the left; bottom panel and inspector on the right), connection, access level, cursor position, staged count, encoding |
 
 Preset compositions: Table editing, Script with inline results, Compare (two groups), Diagram (full-bleed canvas), Focus (editor only).
 
@@ -76,7 +75,7 @@ On relaunch the app restores **open tabs and layout** (tabs, splits, panel sizes
 
 ### Search
 
-Search (⌘P) finds connections, tables, columns and scripts. It is search only, not a command palette.
+Search (⌘P) opens as a popover under the title bar and closes with ⌘P or Esc. It finds connections, tables, columns and scripts. It is search only, not a command palette.
 
 - Search runs against a **local cached index** of each connection's schema (schemas, tables, columns).
 - The index refreshes **on connect** and **after any DDL run in the app**.
@@ -86,11 +85,11 @@ Search (⌘P) finds connections, tables, columns and scripts. It is search only,
 
 Each connection has an **access level**:
 
-| Level | Allows |
-|---|---|
-| RO | Reads only |
-| RW | Reads and data changes |
-| DDL | Reads, data changes and schema changes |
+| Level | Allows                                 |
+| ----- | -------------------------------------- |
+| RO    | Reads only                             |
+| RW    | Reads and data changes                 |
+| DDL   | Reads, data changes and schema changes |
 
 Enforcement uses two layers:
 

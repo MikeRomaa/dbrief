@@ -27,16 +27,16 @@ A Tauri app that opens with the full shell layout (empty panels), light/dark the
 
 ## Stack
 
-| Area | Choice |
-|---|---|
-| App shell | Tauri 2 |
-| Frontend | React 19 with React Compiler, TypeScript 7, Vite |
-| Styling | Plain CSS + CSS modules on Contrast design tokens |
-| Rust database layer | sqlx (SQLite now; PostgreSQL in milestone 2) |
-| Package manager | npm |
-| Lint / format | Biome (TS), rustfmt + clippy (Rust) |
-| Tests | cargo test; Vitest for logic only |
-| Version control | git, no CI yet |
+| Area                | Choice                                            |
+| ------------------- | ------------------------------------------------- |
+| App shell           | Tauri 2                                           |
+| Frontend            | React 19 with React Compiler, TypeScript 7, Vite  |
+| Styling             | Plain CSS + CSS modules on Contrast design tokens |
+| Rust database layer | sqlx (SQLite now; PostgreSQL in milestone 2)      |
+| Package manager     | npm                                               |
+| Lint / format       | Biome (TS), rustfmt + clippy (Rust)               |
+| Tests               | cargo test; Vitest for logic only                 |
+| Version control     | git, no CI yet                                    |
 
 Note on sqlx: the typed query macros (`query!`, `query_as!`) are used for the app's own tables. User queries in later milestones run through sqlx's dynamic row API, since their columns aren't known at build time.
 
@@ -53,8 +53,9 @@ dbrief/
 ├── src/                    # React frontend
 │   ├── shell/              # layout regions
 │   ├── theme/              # tokens.css, theme logic
-│   ├── state/              # layout + settings state
+│   ├── hooks/              # React hooks (layout, settings, window size)
 │   └── lib/                # pure logic (tested with Vitest)
+├── tests/                  # Vitest tests, mirroring src/ (e.g. tests/lib/commands.test.ts)
 ├── package.json
 ├── biome.json
 └── plans/
@@ -76,29 +77,29 @@ dbrief/
 3. **Design tokens and themes**
    - Pull the Contrast token values from the Claude Design project into `src/theme/tokens.css`, renamed to readable names. The mockups' short names are only used to look values up:
 
-     | Token | Mockup name | Used for |
-     |---|---|---|
-     | `--color-bg` | `--bg` | Main background |
-     | `--color-surface` | `--sf` | Panels, bars, toolbars |
-     | `--color-raised` | `--rs` | Raised surfaces (cards, popovers) |
-     | `--color-hover` | `--hv` | Hovered rows and items |
-     | `--color-selected` | `--sel` | Selected rows and items |
-     | `--color-border` | `--bd` | Default borders and dividers |
-     | `--color-border-strong` | `--bx` | Emphasized borders (section headers) |
-     | `--color-text` | `--fg` | Primary text |
-     | `--color-text-muted` | `--mu` | Secondary text, labels |
-     | `--color-text-faint` | `--fa` | Placeholders, line numbers |
-     | `--color-changed`, `--color-changed-bg` | `--st`, `--stb` | Staged edits, focus, links |
-     | `--color-added`, `--color-added-bg` | `--ad`, `--adb` | Inserted rows, success |
-     | `--color-removed`, `--color-removed-bg` | `--rm`, `--rmb` | Deleted rows |
-     | `--color-error`, `--color-error-bg` | `--er`, `--erb` | Errors |
-     | `--color-warning`, `--color-warning-bg` | `--wn`, `--wnb` | Warnings |
-     | `--syntax-keyword` | `--kw` | SQL keywords |
-     | `--syntax-string` | `--str` | String literals |
-     | `--syntax-number` | `--num` | Numeric literals |
-     | `--syntax-comment` | `--cm` | Comments |
-     | `--font-ui` | `--ui` | IBM Plex Sans |
-     | `--font-mono` | `--mono` | Paper Mono |
+     | Token                                   | Mockup name     | Used for                             |
+     | --------------------------------------- | --------------- | ------------------------------------ |
+     | `--color-bg`                            | `--bg`          | Main background                      |
+     | `--color-surface`                       | `--sf`          | Panels, bars, toolbars               |
+     | `--color-raised`                        | `--rs`          | Raised surfaces (cards, popovers)    |
+     | `--color-hover`                         | `--hv`          | Hovered rows and items               |
+     | `--color-selected`                      | `--sel`         | Selected rows and items              |
+     | `--color-border`                        | `--bd`          | Default borders and dividers         |
+     | `--color-border-strong`                 | `--bx`          | Emphasized borders (section headers) |
+     | `--color-text`                          | `--fg`          | Primary text                         |
+     | `--color-text-muted`                    | `--mu`          | Secondary text, labels               |
+     | `--color-text-faint`                    | `--fa`          | Placeholders, line numbers           |
+     | `--color-changed`, `--color-changed-bg` | `--st`, `--stb` | Staged edits, focus, links           |
+     | `--color-added`, `--color-added-bg`     | `--ad`, `--adb` | Inserted rows, success               |
+     | `--color-removed`, `--color-removed-bg` | `--rm`, `--rmb` | Deleted rows                         |
+     | `--color-error`, `--color-error-bg`     | `--er`, `--erb` | Errors                               |
+     | `--color-warning`, `--color-warning-bg` | `--wn`, `--wnb` | Warnings                             |
+     | `--syntax-keyword`                      | `--kw`          | SQL keywords                         |
+     | `--syntax-string`                       | `--str`         | String literals                      |
+     | `--syntax-number`                       | `--num`         | Numeric literals                     |
+     | `--syntax-comment`                      | `--cm`          | Comments                             |
+     | `--font-ui`                             | `--ui`          | IBM Plex Sans                        |
+     | `--font-mono`                           | `--mono`        | Paper Mono                           |
    - Light and dark values on `[data-theme]`; System follows `prefers-color-scheme`.
    - Bundle the fonts locally (no network fetch at runtime).
    - Turn off transitions under `prefers-reduced-motion`.
@@ -123,14 +124,16 @@ dbrief/
    - Generate TypeScript types from Rust with `tauri-specta` so the frontend calls are typed.
 
 7. **Shell layout**
-   - Regions and sizes from the spec: top bar 36px, rail 44px, side panel 248px (200–420), editor area (flex, min 320px), bottom panel 220px (collapses to 30px), inspector 300px (optional), status bar 24px.
+   - Regions and sizes from the spec: top bar 34px, rail 44px, side panel 248px (200–420), editor area (flex, min 320px), bottom panel 220px (collapses to 30px), inspector 300px (optional), status bar 24px.
    - Drag handles to resize the side panel and bottom panel.
-   - Top bar: sidebar toggle, empty breadcrumb, search box placeholder (⌘P), layout toggles (side panel / bottom panel / inspector).
+   - Top bar is a custom title bar: app name, empty breadcrumb, minimize / maximize / close (native traffic lights on macOS). Empty areas drag the window.
+   - Status bar holds the layout toggles: side panel on the left, bottom panel and inspector on the right.
+   - ⌘P toggles an empty search popover (no search box in the top bar).
    - Rail: Connections, Explorer, Scripts, History, Diagrams, Settings. Selecting one swaps the side panel's placeholder content.
    - Settings rail item opens a minimal Settings view with the Theme control (Light / Dark / System cards from the mockup).
 
 8. **Layout persistence**
-   - Layout state lives in `src/state/layout.ts` as plain logic (sizes, clamping, collapsed flags, active rail item).
+   - Layout state lives in `src/lib/layout.ts` as plain logic (sizes, clamping, collapsed flags, active rail item).
    - Saved to `ui_state` (debounced) and restored on launch.
    - Vitest tests for clamping and serialization.
 
@@ -143,7 +146,6 @@ dbrief/
 10. **Verify**
     - Run through the "Done when" list on Windows.
     - Update `2-roadmap.md` status: milestone 1 done, milestone 2 next.
-
 
 ## Open questions
 

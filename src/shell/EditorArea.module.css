@@ -1,0 +1,14 @@
+.editorArea {
+    flex: 1;
+    min-width: 320px;
+    min-height: 0;
+    overflow: auto;
+    background: var(--color-bg);
+}
+
+.empty {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    color: var(--color-text-faint);
+}

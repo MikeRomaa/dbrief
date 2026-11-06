@@ -1,0 +1,72 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    font-family: var(--font-ui);
+    font-size: var(--font-size-md);
+    line-height: 1.4;
+    color: var(--color-text);
+    background: var(--color-bg);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+}
+
+button,
+input {
+    font: inherit;
+    color: inherit;
+}
+
+button {
+    cursor: default;
+}
+
+code,
+kbd,
+pre {
+    font-family: var(--font-mono);
+}
+
+/* Visible focus for keyboard users on every control. :where() keeps specificity at zero so components can override it. */
+:where(:focus-visible) {
+    outline: 2px solid var(--color-changed);
+    outline-offset: -2px;
+    border-radius: var(--radius-sm);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* !important is intended: reduced motion must override every component's transitions. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        /* biome-ignore lint/complexity/noImportantStyles: see above */
+        transition: none !important;
+        /* biome-ignore lint/complexity/noImportantStyles: see above */
+        animation: none !important;
+        /* biome-ignore lint/complexity/noImportantStyles: see above */
+        scroll-behavior: auto !important;
+    }
+}

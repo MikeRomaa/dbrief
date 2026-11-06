@@ -1,0 +1,53 @@
+{
+    "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true
+    },
+    "files": {
+        "includes": ["**", "!src/lib/bindings.ts", "!src-tauri/gen", "!target", "!dist", "!**/*.md", "!src-tauri/icons"]
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 120
+    },
+    "css": {
+        "parser": {
+            "cssModules": true
+        }
+    },
+    "html": {
+        "experimentalFullSupportEnabled": true,
+        "formatter": {
+            "enabled": true
+        }
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "recommended"
+        }
+    },
+    "assist": {
+        "actions": {
+            "source": {
+                "organizeImports": {
+                    "level": "on",
+                    "options": {
+                        "sortBareImports": true,
+                        "groups": [
+                            [":NODE:", ":PACKAGE:", ":PACKAGE_WITH_PROTOCOL:"],
+                            ":BLANK_LINE:",
+                            [":ALIAS:", ":PATH:", "!:STYLE:"],
+                            ":BLANK_LINE:",
+                            ":STYLE:"
+                        ]
+                    }
+                }
+            }
+        }
+    }
+}

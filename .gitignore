@@ -1,0 +1,24 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+*.log
+npm-debug.log*
+
+# Tauri
+src-tauri/gen/schemas/
+src-tauri/target/
+
+# sqlx dev database used by query! macros at build time (see .env)
+/dev.db
+/dev.db-*
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

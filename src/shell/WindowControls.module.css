@@ -1,0 +1,31 @@
+.controls {
+    display: flex;
+    align-self: stretch;
+}
+
+/* Square: the title bar is 34px including its 1px bottom border, so buttons are 33×33. */
+.button {
+    display: grid;
+    place-items: center;
+    width: 33px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+}
+
+.button:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
+}
+
+/* Close follows the platform convention: red on hover. */
+.button[data-close]:hover {
+    background: #c42b1c;
+    color: #ffffff;
+}
+
+.button:focus-visible {
+    outline-offset: -2px;
+    border-radius: 0;
+}
