@@ -7,6 +7,7 @@ use sqlx::{AssertSqlSafe, Connection as _, SqliteConnection};
 
 use super::{Connector, EngineConnection, PATH, UrlError, UrlParts, decode, strip_prefix_ci};
 use crate::connections::{AccessLevel, ConnectionInput, Engine};
+use crate::ssh::Endpoint;
 
 /// Opens the existing file only, never creating one. RO opens with `mode=ro`. sqlx turns on
 /// `foreign_keys` per connection and leaves `journal_mode` alone, so the file itself isn't changed.
@@ -28,7 +29,11 @@ impl SqliteConnector {
 
 #[async_trait]
 impl Connector for SqliteConnector {
-    async fn connect(&self) -> Result<Box<dyn EngineConnection>, sqlx::Error> {
+    /// SQLite files are local, so there is never a tunnel.
+    async fn connect(
+        &self,
+        _via: Option<&Endpoint>,
+    ) -> Result<Box<dyn EngineConnection>, sqlx::Error> {
         let conn = SqliteConnection::connect_with(&self.options).await?;
         Ok(Box::new(SqliteEngineConnection(conn)))
     }

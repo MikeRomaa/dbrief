@@ -13,11 +13,16 @@ use percent_encoding::{AsciiSet, CONTROLS, percent_decode_str};
 use serde::{Deserialize, Serialize};
 
 use crate::connections::{ConnectionInput, Engine, SslMode};
+use crate::ssh::Endpoint;
 
 /// Opens connections with fixed settings. Kept by a session so it can reconnect the same way.
 #[async_trait]
 pub trait Connector: Debug + Send + Sync {
-    async fn connect(&self) -> Result<Box<dyn EngineConnection>, sqlx::Error>;
+    /// Connects directly, or through an SSH tunnel's local endpoint when `via` is set.
+    async fn connect(
+        &self,
+        via: Option<&Endpoint>,
+    ) -> Result<Box<dyn EngineConnection>, sqlx::Error>;
 }
 
 /// One open database connection.

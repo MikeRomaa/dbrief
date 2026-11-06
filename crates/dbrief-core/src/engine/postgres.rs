@@ -2,14 +2,15 @@
 
 use async_trait::async_trait;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
-use sqlx::postgres::PgConnectOptions;
+use sqlx::postgres::{PgConnectOptions, PgSslMode};
 use sqlx::{AssertSqlSafe, Connection as _, PgConnection};
 use url::Url;
 
 use super::{
     Connector, EngineConnection, PATH, UrlError, UrlParts, decode, non_empty, strip_prefix_ci,
 };
-use crate::connections::{AccessLevel, ConnectionInput, Engine};
+use crate::connections::{AccessLevel, ConnectionInput, Engine, SslMode};
+use crate::ssh::Endpoint;
 
 /// Reported to the server as `application_name`.
 const APPLICATION_NAME: &str = "DBrief";
@@ -17,9 +18,25 @@ const APPLICATION_NAME: &str = "DBrief";
 /// Every option is set explicitly so `PG*` environment variables don't leak into the connection.
 /// RO connections are read-only at the server: every transaction starts with
 /// `default_transaction_read_only`. A default schema becomes the `search_path`.
-#[derive(Debug)]
+///
+/// SSL follows libpq's `sslmode`, defaulting to `prefer`. A CA certificate replaces the system roots
+/// for `verify-ca` and `verify-full`.
 pub struct PostgresConnector {
     options: PgConnectOptions,
+}
+
+/// `PgConnectOptions` prints the password, so only the safe parts are shown.
+impl std::fmt::Debug for PostgresConnector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let o = &self.options;
+        f.debug_struct("PostgresConnector")
+            .field("host", &o.get_host())
+            .field("port", &o.get_port())
+            .field("database", &o.get_database())
+            .field("username", &o.get_username())
+            .field("ssl_mode", &o.get_ssl_mode())
+            .finish_non_exhaustive()
+    }
 }
 
 impl PostgresConnector {
@@ -27,7 +44,16 @@ impl PostgresConnector {
         let mut options = PgConnectOptions::new_without_pgpass()
             .host(input.host.as_deref().unwrap_or_default())
             .port(input.port.unwrap_or(5432))
-            .application_name(APPLICATION_NAME);
+            .application_name(APPLICATION_NAME)
+            .ssl_mode(pg_ssl_mode(input.ssl_mode.unwrap_or(SslMode::Prefer)));
+
+        if let Some(ca) = input
+            .ca_cert_path
+            .as_deref()
+            .filter(|c| !c.trim().is_empty())
+        {
+            options = options.ssl_root_cert(ca.trim());
+        }
 
         if let Some(user) = input.username.as_deref().filter(|u| !u.is_empty()) {
             options = options.username(user);
@@ -64,9 +90,52 @@ impl PostgresConnector {
 
 #[async_trait]
 impl Connector for PostgresConnector {
-    async fn connect(&self) -> Result<Box<dyn EngineConnection>, sqlx::Error> {
-        let conn = PgConnection::connect_with(&self.options).await?;
+    async fn connect(
+        &self,
+        via: Option<&Endpoint>,
+    ) -> Result<Box<dyn EngineConnection>, sqlx::Error> {
+        let conn = match via {
+            None => PgConnection::connect_with(&self.options).await?,
+            Some(endpoint) => {
+                PgConnection::connect_with(&through(&self.options, endpoint)?).await?
+            }
+        };
         Ok(Box::new(PostgresConnection(conn)))
+    }
+}
+
+/// Options that dial the tunnel instead of the server. Through a Unix socket the host name stays, so
+/// TLS is still verified against the real server.
+fn through(
+    options: &PgConnectOptions,
+    endpoint: &Endpoint,
+) -> Result<PgConnectOptions, sqlx::Error> {
+    match endpoint {
+        #[cfg(unix)]
+        Endpoint::UnixDir(dir) => Ok(options.clone().socket(dir)),
+        Endpoint::Tcp(addr) => {
+            if matches!(options.get_ssl_mode(), PgSslMode::VerifyFull) {
+                return Err(sqlx::Error::Configuration(
+                    "verify-full can't check the host name through an SSH tunnel on this platform; use verify-ca"
+                        .into(),
+                ));
+            }
+            Ok(options
+                .clone()
+                .host(&addr.ip().to_string())
+                .port(addr.port()))
+        }
+    }
+}
+
+fn pg_ssl_mode(mode: SslMode) -> PgSslMode {
+    match mode {
+        SslMode::Disable => PgSslMode::Disable,
+        SslMode::Allow => PgSslMode::Allow,
+        SslMode::Prefer => PgSslMode::Prefer,
+        SslMode::Require => PgSslMode::Require,
+        SslMode::VerifyCa => PgSslMode::VerifyCa,
+        SslMode::VerifyFull => PgSslMode::VerifyFull,
     }
 }
 
@@ -267,7 +336,6 @@ pub(super) fn build_url(input: &ConnectionInput) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::connections::SslMode;
     use crate::engine::parse_url;
 
     fn pg() -> ConnectionInput {
@@ -305,6 +373,40 @@ mod tests {
             PostgresConnector::new(&input, None).options.get_options(),
             None
         );
+    }
+
+    #[test]
+    fn options_carry_ssl_settings_and_tunnel_endpoints() {
+        let mut input = pg();
+        input.host = Some("db.example.com".into());
+        input.port = Some(5433);
+        assert!(matches!(
+            PostgresConnector::new(&input, None).options.get_ssl_mode(),
+            PgSslMode::Prefer
+        ));
+
+        input.ssl_mode = Some(SslMode::VerifyFull);
+        input.ca_cert_path = Some(" /certs/ca.pem ".into());
+        let options = PostgresConnector::new(&input, None).options;
+        assert!(matches!(options.get_ssl_mode(), PgSslMode::VerifyFull));
+
+        let tcp = Endpoint::Tcp("127.0.0.1:40000".parse().unwrap());
+        assert!(through(&options, &tcp).is_err());
+
+        #[cfg(unix)]
+        {
+            let unix = through(&options, &Endpoint::UnixDir("/tmp/t".into())).unwrap();
+            assert_eq!(unix.get_host(), "db.example.com");
+            assert_eq!(
+                unix.get_socket().map(|p| p.display().to_string()),
+                Some("/tmp/t".into())
+            );
+        }
+
+        input.ssl_mode = Some(SslMode::VerifyCa);
+        let options = PostgresConnector::new(&input, None).options;
+        let tcp = through(&options, &tcp).unwrap();
+        assert_eq!((tcp.get_host(), tcp.get_port()), ("127.0.0.1", 40000));
     }
 
     #[test]

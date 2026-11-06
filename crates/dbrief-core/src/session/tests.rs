@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::connections::ConnectionInput;
+use crate::ssh::SshEnv;
 
 /// Creates a SQLite file with one table and one row.
 async fn sqlite_file(dir: &Path) -> String {
@@ -35,10 +36,15 @@ async fn sqlite_file(dir: &Path) -> String {
     path.display().to_string()
 }
 
+/// For connections without a tunnel, where the SSH settings are never read.
+fn no_ssh() -> SshEnv {
+    SshEnv::new(Path::new("unused"))
+}
+
 fn sqlite_target(path: &str, level: AccessLevel) -> ConnectTarget {
     let mut input = ConnectionInput::new("app", Engine::Sqlite, level);
     input.file_path = Some(path.into());
-    ConnectTarget::new(Uuid::new_v4(), &input, None).unwrap()
+    ConnectTarget::new(Uuid::new_v4(), &input, &Credentials::default(), &no_ssh()).unwrap()
 }
 
 #[tokio::test]
@@ -149,9 +155,11 @@ async fn startup_sql_runs_on_connect_and_failures_are_reported() {
     input.file_path = Some(path);
     input.startup_sql =
         Some("CREATE TEMP TABLE startup_ran (x); INSERT INTO startup_ran VALUES ('yes');".into());
-    let mut session = Session::open(ConnectTarget::new(Uuid::new_v4(), &input, None).unwrap())
-        .await
-        .unwrap();
+    let mut session = Session::open(
+        ConnectTarget::new(Uuid::new_v4(), &input, &Credentials::default(), &no_ssh()).unwrap(),
+    )
+    .await
+    .unwrap();
     let ran = session
         .fetch_text(
             r#"
@@ -168,7 +176,10 @@ async fn startup_sql_runs_on_connect_and_failures_are_reported() {
 
     input.startup_sql = Some("THIS IS NOT SQL".into());
     assert!(matches!(
-        Session::open(ConnectTarget::new(Uuid::new_v4(), &input, None).unwrap()).await,
+        Session::open(
+            ConnectTarget::new(Uuid::new_v4(), &input, &Credentials::default(), &no_ssh()).unwrap()
+        )
+        .await,
         Err(SessionError::StartupSql(_))
     ));
 }
@@ -268,7 +279,13 @@ mod postgres {
     }
 
     fn pg_target(input: &ConnectionInput, password: &str) -> ConnectTarget {
-        ConnectTarget::new(Uuid::new_v4(), input, Some(password)).unwrap()
+        ConnectTarget::new(
+            Uuid::new_v4(),
+            input,
+            &Credentials::password(password),
+            &no_ssh(),
+        )
+        .unwrap()
     }
 
     /// All PostgreSQL scenarios share one container, since starting one takes a few seconds.

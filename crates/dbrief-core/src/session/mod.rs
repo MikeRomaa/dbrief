@@ -1,5 +1,7 @@
 //! Database sessions for user connections. Each session is one dedicated database connection with its
-//! own transaction state; the app opens one per tab (one per connection until tabs exist).
+//! own transaction state; the app opens one per tab (one per connection until tabs exist). A session
+//! with an SSH tunnel owns the tunnel: it opens with the session, is reopened on reconnect if it
+//! dropped, and closes with the session.
 
 mod target;
 
@@ -14,10 +16,11 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-pub use target::{ConnectTarget, DEFAULT_CONNECT_TIMEOUT};
+pub use target::{ConnectTarget, Credentials, DEFAULT_CONNECT_TIMEOUT};
 
 use crate::connections::{AccessLevel, Engine};
 use crate::engine::EngineConnection;
+use crate::ssh::{SshError, Tunnel};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
@@ -27,6 +30,8 @@ pub enum SessionError {
     Connect(String),
     #[error("timed out connecting after {} s", .0.as_secs())]
     Timeout(Duration),
+    #[error("SSH tunnel: {0}")]
+    Ssh(#[from] SshError),
     #[error("startup SQL failed: {0}")]
     StartupSql(String),
     #[error("the connection was lost during an open transaction; its changes were rolled back")]
@@ -56,26 +61,66 @@ pub struct TestResult {
 
 /// Opens a throwaway connection, reports the server version and round-trip latency, and closes it.
 pub async fn test(target: &ConnectTarget) -> Result<TestResult, SessionError> {
-    let mut conn = connect(target).await?;
-    let server_version = conn.server_version().await?;
+    let mut tunnel = None;
+    let result = test_with(target, &mut tunnel).await;
+    if let Some(tunnel) = tunnel {
+        tunnel.close().await;
+    }
 
-    let start = Instant::now();
-    conn.ping().await?;
-    let latency_ms = (start.elapsed().as_secs_f64() * 10_000.0).round() / 10.0;
-
-    conn.close().await;
-    Ok(TestResult {
-        server_version,
-        latency_ms,
-    })
+    result
 }
 
-/// Connects within the target's timeout, then runs its startup SQL.
-async fn connect(target: &ConnectTarget) -> Result<Box<dyn EngineConnection>, SessionError> {
-    let mut conn = tokio::time::timeout(target.connect_timeout, target.connector.connect())
+async fn test_with(
+    target: &ConnectTarget,
+    tunnel: &mut Option<Tunnel>,
+) -> Result<TestResult, SessionError> {
+    let mut conn = connect(target, tunnel).await?;
+    let measured = async {
+        let server_version = conn.server_version().await?;
+        let start = Instant::now();
+        conn.ping().await?;
+        let latency_ms = (start.elapsed().as_secs_f64() * 10_000.0).round() / 10.0;
+        Ok::<_, sqlx::Error>(TestResult {
+            server_version,
+            latency_ms,
+        })
+    }
+    .await;
+
+    conn.close().await;
+    Ok(measured?)
+}
+
+/// Opens the tunnel if the target has one and it isn't open, connects, and runs the startup SQL. The
+/// connect timeout covers the tunnel too.
+async fn connect(
+    target: &ConnectTarget,
+    tunnel: &mut Option<Tunnel>,
+) -> Result<Box<dyn EngineConnection>, SessionError> {
+    let attempt = async {
+        let via = match &target.ssh {
+            None => None,
+            Some(config) => {
+                if !tunnel.as_ref().is_some_and(Tunnel::is_open) {
+                    if let Some(old) = tunnel.take() {
+                        old.close().await;
+                    }
+                    *tunnel = Some(Tunnel::open(config).await?);
+                }
+                tunnel.as_ref().map(Tunnel::endpoint)
+            }
+        };
+
+        target
+            .connector
+            .connect(via)
+            .await
+            .map_err(|e| SessionError::Connect(e.to_string()))
+    };
+
+    let mut conn = tokio::time::timeout(target.connect_timeout, attempt)
         .await
-        .map_err(|_| SessionError::Timeout(target.connect_timeout))?
-        .map_err(|e| SessionError::Connect(e.to_string()))?;
+        .map_err(|_| SessionError::Timeout(target.connect_timeout))??;
 
     if let Some(sql) = &target.startup_sql
         && let Err(e) = conn.execute(sql).await
@@ -102,6 +147,7 @@ pub enum Liveness {
 pub struct Session {
     info: SessionInfo,
     target: ConnectTarget,
+    tunnel: Option<Tunnel>,
     conn: Option<Box<dyn EngineConnection>>,
     in_transaction: bool,
     transaction_lost: bool,
@@ -109,12 +155,26 @@ pub struct Session {
 
 impl Session {
     pub async fn open(target: ConnectTarget) -> Result<Self, SessionError> {
-        let mut conn = connect(&target).await?;
-        let server_version = match conn.server_version().await {
-            Ok(version) => version,
+        let mut tunnel = None;
+        let opened = async {
+            let mut conn = connect(&target, &mut tunnel).await?;
+            match conn.server_version().await {
+                Ok(version) => Ok((conn, version)),
+                Err(e) => {
+                    conn.close().await;
+                    Err(SessionError::from(e))
+                }
+            }
+        }
+        .await;
+
+        let (conn, server_version) = match opened {
+            Ok(opened) => opened,
             Err(e) => {
-                conn.close().await;
-                return Err(e.into());
+                if let Some(tunnel) = tunnel {
+                    tunnel.close().await;
+                }
+                return Err(e);
             }
         };
 
@@ -127,6 +187,7 @@ impl Session {
                 server_version,
             },
             target,
+            tunnel,
             conn: Some(conn),
             in_transaction: false,
             transaction_lost: false,
@@ -168,7 +229,7 @@ impl Session {
             return Err(SessionError::TransactionLost);
         }
 
-        self.conn = Some(connect(&self.target).await?);
+        self.conn = Some(connect(&self.target, &mut self.tunnel).await?);
         Ok(Liveness::Reconnected)
     }
 
@@ -178,7 +239,7 @@ impl Session {
             conn.close().await;
         }
 
-        self.conn = Some(connect(&self.target).await?);
+        self.conn = Some(connect(&self.target, &mut self.tunnel).await?);
         self.transaction_lost = false;
         Ok(())
     }
@@ -193,9 +254,22 @@ impl Session {
     }
 
     pub async fn close(mut self) {
+        self.close_all().await;
+    }
+
+    async fn close_all(&mut self) {
         if let Some(conn) = self.conn.take() {
             conn.close().await;
         }
+        if let Some(tunnel) = self.tunnel.take() {
+            tunnel.close().await;
+        }
+    }
+
+    /// Where the database driver reaches this session's SSH tunnel.
+    #[cfg(test)]
+    pub(crate) fn tunnel_endpoint(&self) -> Option<&crate::ssh::Endpoint> {
+        self.tunnel.as_ref().map(Tunnel::endpoint)
     }
 
     /// Simulates the network dropping the connection.
@@ -289,8 +363,5 @@ impl SessionManager {
 
 /// Closes a session that may still be borrowed elsewhere; waits for its lock first.
 async fn close_shared(session: Arc<Mutex<Session>>) {
-    let mut session = session.lock().await;
-    if let Some(conn) = session.conn.take() {
-        conn.close().await;
-    }
+    session.lock().await.close_all().await;
 }
