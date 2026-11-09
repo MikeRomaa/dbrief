@@ -131,6 +131,29 @@
     opacity: 0.4;
 }
 
+/* Transposed: the field labels' edge, drawn like the panel splitters (Splitter.module.css): a 1px
+   line over the labels' own border, with a wider invisible hit area. */
+.labelResize {
+    position: absolute;
+    top: 0;
+    z-index: 4;
+    width: 1px;
+    background: var(--color-border);
+    cursor: col-resize;
+}
+
+.labelResize::before {
+    content: "";
+    position: absolute;
+    inset: 0 -3px;
+}
+
+.labelResize:hover,
+.labelResize[data-active] {
+    background: var(--color-changed);
+    transition: background var(--transition-fast);
+}
+
 .row {
     position: absolute;
     left: 0;
@@ -240,27 +263,86 @@
     font-style: italic;
 }
 
-.row[data-state="updated"] .rowNumber {
+/* Row states sit on the cells and the row number, so they also mark a record drawn as a column. */
+.rowNumber[data-state="updated"],
+.recordHeader[data-state="updated"] {
     color: var(--color-changed);
 }
 
-.row[data-state="inserted"] .rowNumber,
-.row[data-state="inserted"] .cell:not([data-selected]) {
+.rowNumber[data-state="inserted"],
+.recordHeader[data-state="inserted"],
+.cell[data-state="inserted"]:not([data-selected]) {
     background: var(--color-added-bg);
     color: var(--color-added);
 }
 
-.row[data-state="inserted"] .cell[data-kind="default"],
-.row[data-state="inserted"] .cell[data-kind="null"] {
+.cell[data-state="inserted"][data-kind="default"],
+.cell[data-state="inserted"][data-kind="null"] {
     color: var(--color-text-faint);
 }
 
-.row[data-state="deleted"] .rowNumber,
-.row[data-state="deleted"] .cell:not([data-selected]) {
+.rowNumber[data-state="deleted"],
+.recordHeader[data-state="deleted"],
+.cell[data-state="deleted"]:not([data-selected]) {
     background: var(--color-removed-bg);
     color: var(--color-removed);
 }
 
-.row[data-state="deleted"] .cell {
+.cell[data-state="deleted"] {
     text-decoration: line-through;
+}
+
+/* Transposed: row numbers across the top, column names down the left. */
+.recordHeader {
+    position: absolute;
+    top: 0;
+    height: 28px;
+    padding: 0 8px;
+    border-right: 1px solid var(--color-border);
+    color: var(--color-text-faint);
+    font-size: var(--font-size-2xs);
+    line-height: 28px;
+    text-align: right;
+}
+
+.fieldLabel {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 8px;
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    overflow: hidden;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Narrowed labels truncate the name too, once the type has no room left. */
+.fieldLabel .headerName {
+    min-width: 0;
+}
+
+/* Above the record headers and their resize handles, which scroll under it. */
+.headerRow .corner {
+    z-index: 3;
+}
+
+.row:hover .fieldLabel {
+    background: var(--color-hover);
+}
+
+.fieldLabel[data-drop="before"] {
+    box-shadow: inset 0 2px 0 var(--color-changed);
+}
+
+.fieldLabel[data-drop="after"] {
+    box-shadow: inset 0 -2px 0 var(--color-changed);
 }

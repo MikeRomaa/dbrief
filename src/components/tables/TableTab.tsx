@@ -13,6 +13,7 @@ import {
     Plus,
     RefreshCw,
     Search,
+    SquareSplitHorizontal,
     TriangleAlert,
     X,
 } from "lucide-react";
@@ -115,6 +116,7 @@ export function TableTab({ table, active, connections, settings, onEdited, onRun
     const [layout, setLayout] = useState<ColumnLayout>(EMPTY_LAYOUT);
     const [keyColumns, setKeyColumns] = useState<ReadonlySet<string>>(new Set());
     const [selection, setSelection] = useState<Selection>(at(0, 0));
+    const [transposed, setTransposed] = useState(false);
     const [find, setFind] = useState<{ open: boolean; text: string; matches: [number, number][]; current: number }>({
         open: false,
         text: "",
@@ -671,6 +673,16 @@ export function TableTab({ table, active, connections, settings, onEdited, onRun
                         >
                             Tx: {edits.mode === "manual" ? "Manual" : "Auto"}
                         </MenuButton>
+                        <button
+                            type="button"
+                            className={`${controls.iconButton} ${styles.toggle}`}
+                            aria-label="Transpose"
+                            aria-pressed={transposed}
+                            onClick={() => setTransposed((t) => !t)}
+                            {...tooltip(transposed ? "Show rows as rows" : "Transpose: show rows as columns")}
+                        >
+                            <SquareSplitHorizontal size={14} />
+                        </button>
                         <MenuButton
                             label="Columns"
                             entries={columnsMenu}
@@ -833,6 +845,7 @@ export function TableTab({ table, active, connections, settings, onEdited, onRun
                             currentMatch={currentMatch ? `${currentMatch[0]}:${currentMatch[1]}` : null}
                             onCopy={(format, r, c) => void copy(format, r, c)}
                             editing={edits.editing}
+                            transposed={transposed}
                         />
                     ) : (
                         <p className={styles.message}>{loading ? "Loading…" : problem ? "" : "Not loaded yet."}</p>

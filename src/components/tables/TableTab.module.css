@@ -86,6 +86,12 @@
     background: var(--color-border);
 }
 
+/* A pressed toolbar toggle (Transpose). */
+.toggle[aria-pressed="true"] {
+    background: var(--color-selected);
+    color: var(--color-text);
+}
+
 .paging {
     display: inline-flex;
     align-items: center;
