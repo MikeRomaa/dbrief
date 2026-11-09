@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { backend } from "@/lib/backend";
+import { backend } from "@/lib/ipc/backend";
 
 /** `ui_state` key set once the welcome screen has been completed. */
 const FIRST_LAUNCH_KEY = "first_launch_done";

@@ -5,6 +5,7 @@ use super::{
     ConstraintInfo, IndexInfo, ObjectKind, ObjectRef, SchemaColumn, SchemaObject, Snapshot,
     TableStructure, TriggerInfo, not_found, qualified, quote_ident, quote_literal, records,
 };
+use crate::edit::{EditColumn, KeyCandidate};
 use crate::session::{Session, SessionError};
 
 /// Schemas that hold the system catalogs, TOAST data and other sessions' temporary tables.
@@ -682,4 +683,102 @@ async fn table_ddl(session: &mut Session, object: &ObjectRef) -> Result<String, 
         ddl.push_str(&format!("\n{};\n", trigger.definition));
     }
     Ok(ddl)
+}
+
+/// Columns and unique indexes of a table, for editing (see `edit`).
+pub(super) async fn edit_facts(
+    session: &mut Session,
+    object: &ObjectRef,
+) -> Result<(Vec<EditColumn>, Vec<KeyCandidate>), SessionError> {
+    let oid = relation_oid(&object.schema, &object.name);
+    let values = session
+        .fetch_values(&format!(
+            r#"
+            SELECT
+                a.attname AS name,
+                format_type(a.atttypid, a.atttypmod) AS type_name,
+                CASE
+                    WHEN t.typtype = 'd' THEN format_type(t.typbasetype, t.typtypmod)
+                    ELSE format_type(a.atttypid, a.atttypmod)
+                END AS base_type,
+                NOT a.attnotnull AS nullable,
+                pg_get_expr(d.adbin, d.adrelid) AS default_value,
+                a.attidentity AS identity,
+                a.attgenerated AS generated
+            FROM
+                pg_attribute a
+                JOIN pg_type t ON t.oid = a.atttypid
+                LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid
+                AND d.adnum = a.attnum
+            WHERE
+                a.attrelid = {oid}
+                AND a.attnum > 0
+                AND NOT a.attisdropped
+            ORDER BY
+                a.attnum
+            "#
+        ))
+        .await?;
+    let columns = records(&values)
+        .map(|r| {
+            let identity = r.string("identity");
+            let generated = r.string("generated");
+            let default_value = match identity.as_str() {
+                "a" | "d" => Some("identity".to_owned()),
+                _ => r.text("default_value"),
+            };
+            EditColumn {
+                name: r.string("name"),
+                type_name: r.string("type_name"),
+                base_type: r.string("base_type"),
+                nullable: r.bool("nullable"),
+                default_value,
+                writable: identity != "a" && generated.is_empty(),
+            }
+        })
+        .collect();
+
+    let values = session
+        .fetch_values(&format!(
+            r#"
+            SELECT
+                c.relname AS name,
+                x.indisprimary AS is_primary,
+                x.indpred IS NOT NULL AS partial,
+                x.indexprs IS NOT NULL AS expressions,
+                (
+                    SELECT
+                        json_agg(a.attname ORDER BY k.n)
+                    FROM
+                        unnest(x.indkey) WITH ORDINALITY AS k (attnum, n)
+                        JOIN pg_attribute a ON a.attrelid = x.indrelid
+                        AND a.attnum = k.attnum
+                    WHERE
+                        k.n <= x.indnkeyatts
+                ) AS columns
+            FROM
+                pg_index x
+                JOIN pg_class c ON c.oid = x.indexrelid
+            WHERE
+                x.indrelid = {oid}
+                AND x.indisunique
+                AND x.indisvalid
+            "#
+        ))
+        .await?;
+    let candidates = records(&values)
+        .map(|r| KeyCandidate {
+            name: r.string("name"),
+            primary: r.bool("is_primary"),
+            partial: r.bool("partial"),
+            columns: if r.bool("expressions") {
+                None
+            } else {
+                r.text("columns")
+                    .and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok())
+            },
+        })
+        .collect();
+
+    Ok((columns, candidates))
 }

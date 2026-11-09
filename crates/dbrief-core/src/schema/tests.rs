@@ -439,8 +439,8 @@ mod postgres {
             filter: None,
             order: None,
         };
-        let sql = blobs.page_sql(Engine::Postgres, None, 10, 0).unwrap();
-        let page = session.table_page(&sql).await.unwrap();
+        let sql = blobs.page_sql(Engine::Postgres, None, None, 10, 0).unwrap();
+        let page = session.table_page(&sql, false).await.unwrap();
         assert_eq!(
             page.cells[0][1],
             Some(crate::grid::Cell::Binary {
@@ -549,9 +549,9 @@ async fn sqlite_table_pages_keep_full_values() {
         order: None,
     };
     let sql = query
-        .page_sql(Engine::Sqlite, order.as_deref(), 1, 0)
+        .page_sql(Engine::Sqlite, order.as_deref(), None, 1, 0)
         .unwrap();
-    let page = session.table_page(&sql).await.unwrap();
+    let page = session.table_page(&sql, false).await.unwrap();
     assert_eq!(page.cells.len(), 1);
     assert_eq!(
         page.cells[0][2],
@@ -565,9 +565,9 @@ async fn sqlite_table_pages_keep_full_values() {
 
     // The second page: long text is cut in the cell and whole in the page.
     let sql = query
-        .page_sql(Engine::Sqlite, order.as_deref(), 1, 1)
+        .page_sql(Engine::Sqlite, order.as_deref(), None, 1, 1)
         .unwrap();
-    let page = session.table_page(&sql).await.unwrap();
+    let page = session.table_page(&sql, false).await.unwrap();
     assert!(matches!(
         &page.cells[0][1],
         Some(Cell::Cut { length: 2000, .. })
@@ -583,8 +583,8 @@ async fn sqlite_table_pages_keep_full_values() {
         filter: Some("id > 100".into()),
         ..query.clone()
     };
-    let sql = empty.page_sql(Engine::Sqlite, None, 10, 0).unwrap();
-    let page = session.table_page(&sql).await.unwrap();
+    let sql = empty.page_sql(Engine::Sqlite, None, None, 10, 0).unwrap();
+    let page = session.table_page(&sql, false).await.unwrap();
     assert!(page.cells.is_empty());
     assert_eq!(page.columns.len(), 3);
 
@@ -598,9 +598,9 @@ async fn sqlite_table_pages_keep_full_values() {
         filter: Some("nope = 1".into()),
         ..query
     };
-    let sql = broken.page_sql(Engine::Sqlite, None, 10, 0).unwrap();
+    let sql = broken.page_sql(Engine::Sqlite, None, None, 10, 0).unwrap();
     assert!(matches!(
-        session.table_page(&sql).await,
+        session.table_page(&sql, false).await,
         Err(SessionError::Query(_))
     ));
 }

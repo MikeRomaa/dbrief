@@ -4,6 +4,7 @@
 pub mod actions;
 pub mod classify;
 pub mod connections;
+pub mod edit;
 pub mod engine;
 pub mod export;
 pub mod grid;

@@ -2,6 +2,7 @@
 
 mod commands;
 mod connections;
+mod edit;
 mod run;
 mod schema;
 mod scripts;
@@ -104,11 +105,17 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             schema::export_table,
             schema::table_layout,
             schema::set_table_layout,
+            edit::table_edit_info,
+            edit::preview_changes,
+            edit::apply_changes,
+            edit::stage_file,
+            edit::discard_uploads,
+            edit::copy_rows,
         ])
 }
 
 /// Where the generated TypeScript bindings are written (relative to this crate).
-pub const BINDINGS_PATH: &str = "../src/lib/bindings.ts";
+pub const BINDINGS_PATH: &str = "../src/lib/ipc/bindings.ts";
 
 pub fn export_bindings(builder: &tauri_specta::Builder<tauri::Wry>) {
     builder

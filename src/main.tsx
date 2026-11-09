@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { Shell } from "@/shell/Shell";
+import { Shell } from "@/components/shell/Shell";
 
 import "@/theme/global.css";
 import "@/theme/tokens.css";

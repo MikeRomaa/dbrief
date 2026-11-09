@@ -1,0 +1,89 @@
+.calendar {
+    display: flex;
+    flex-direction: column;
+    font-family: var(--font-ui);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 4px 0 10px;
+}
+
+.month {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+.nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+}
+
+.nav:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
+}
+
+.weekdays,
+.week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    padding: 0 6px;
+}
+
+.weekdays span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 20px;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-2xs);
+}
+
+.days {
+    padding-bottom: 6px;
+}
+
+.day {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+}
+
+.day:hover {
+    background: var(--color-hover);
+}
+
+.day[data-outside] {
+    color: var(--color-text-faint);
+}
+
+.day[data-today] {
+    text-decoration: underline;
+}
+
+.day[data-selected] {
+    background: var(--color-text);
+    color: var(--color-bg);
+}
+
+.day:focus-visible {
+    outline: 2px solid var(--color-changed);
+    outline-offset: -2px;
+}

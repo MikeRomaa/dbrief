@@ -1,9 +1,9 @@
 import { type ReactNode, useRef, useState } from "react";
 
-import { SecretPrompt } from "@/connections/dialogs";
-import { ActionFailure, backend, type Credentials, errorMessage } from "@/lib/backend";
-import type { ConnectPurpose, SecretKind, SessionInfo } from "@/lib/bindings";
-import type { Connection } from "@/lib/connectionTree";
+import { SecretPrompt } from "@/components/connections/SecretPrompt";
+import type { Connection } from "@/lib/connections/connectionTree";
+import { ActionFailure, backend, type Credentials, errorMessage } from "@/lib/ipc/backend";
+import type { ConnectPurpose, SecretKind, SessionInfo } from "@/lib/ipc/bindings";
 
 const SECRET_FIELDS: Record<SecretKind, keyof Credentials> = {
     password: "password",

@@ -1,9 +1,9 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 
-import { backend, type Settings } from "@/lib/backend";
-import type { Theme } from "@/lib/bindings";
-import { applyTheme } from "@/theme/theme";
+import { backend, type Settings } from "@/lib/ipc/backend";
+import type { Theme } from "@/lib/ipc/bindings";
+import { applyTheme } from "@/lib/theme/theme";
 
 export interface SettingsState {
     settings: Settings | null;

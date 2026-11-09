@@ -57,7 +57,7 @@ Users browse a connection's schema in the Explorer, find any table or column wit
   - **Total count:** an exact `count(*)` with the current filter runs on the background session after the page loads. A count for an older filter is ignored when it arrives. An unfiltered table whose estimate is 1,000,000 rows or more skips the count and shows "of ~1.2M" with a Count button. The Explorer's exact count uses the same code.
 - **Grid cells.** The grid needs more than the text-or-null rows that script results use, so the table page turns each value into a display cell in Rust: `Null`, `Text { text, full_length }` cut at 1,000 characters, or `Binary { size, image: png | jpeg | none }`. PostgreSQL `bytea` arrives as `\x…` hex text over the simple protocol and is decoded; images are recognized by their magic bytes. The session keeps the **full values of the current page** in memory, so the inspector, copy, "Save to file" and Find work on whole values without sending large values over IPC for every page.
 - **Arrays and JSON.** PostgreSQL arrays show inline in their text form (`{a,b}`). The inspector parses the array literal and shows it as a read-only list. JSON shows compact in the cell, cut at the JSON truncation length setting, and pretty-printed in the inspector.
-- **Grid component** (`src/grid/`). Rows and columns are virtualized by hand (fixed row height, no new dependency), so wide tables and large pages stay fast. It uses ARIA `role="grid"` with one active cell (`aria-activedescendant`).
+- **Grid component** (`src/components/grid/`). Rows and columns are virtualized by hand (fixed row height, no new dependency), so wide tables and large pages stay fast. It uses ARIA `role="grid"` with one active cell (`aria-activedescendant`).
   - **Keyboard:** arrows, Home/End, PgUp/PgDn and ⌘↑/↓ move the active cell. Shift extends the range and ⌘A selects all. Mouse drag selects too.
   - **Column widths** come from the header and a sample of values the first time a table opens. Columns resize by dragging and fit to their content on double-click. They reorder by dragging, or with "Move left/right" in the header menu for keyboard users. They hide and show from the header menu and a Columns menu in the toolbar.
   - **Layout** (widths, order, hidden columns) is saved per table in the app database (`table_layouts`, cascading with the connection).
@@ -139,7 +139,7 @@ connections
    - `schema-changed` event. Bindings regenerated with `tauri-specta`.
 
 6. **Tabs**
-   - Table tab keys (`src/lib/tableTabs.ts`); vitest for the keys and for script renames and deletes leaving table tabs alone.
+   - Table tab keys (`src/lib/tabs/tableTabs.ts`); vitest for the keys and for script renames and deletes leaving table tabs alone.
    - The workspace renders both tab kinds; closing a table tab closes its session.
 
 7. **Active connection**

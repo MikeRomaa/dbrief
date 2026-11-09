@@ -66,16 +66,23 @@ impl TableQuery {
         }
     }
 
-    /// The page query: `SELECT *` with the filter, the sort (or `default_order`), and paging.
+    /// The page query: `SELECT *` with the filter, the sort (or `default_order`), and paging. With
+    /// `rowid` (a SQLite rowid name from `edit::ROWID_ALIASES`) the row id comes first.
     pub fn page_sql(
         &self,
         engine: Engine,
         default_order: Option<&str>,
+        rowid: Option<&str>,
         limit: u32,
         offset: u64,
     ) -> Result<String, SessionError> {
+        let key = match rowid {
+            Some(name) if crate::edit::ROWID_ALIASES.contains(&name) => format!("{name},\n    "),
+            Some(_) => return Err(SessionError::Invalid("not a rowid name".into())),
+            None => String::new(),
+        };
         let sql = format!(
-            "SELECT\n    *\n{}{}\nLIMIT\n    {limit}\nOFFSET\n    {offset}",
+            "SELECT\n    {key}*\n{}{}\nLIMIT\n    {limit}\nOFFSET\n    {offset}",
             self.source_and_filter(),
             self.order_by(default_order)
         );
@@ -210,7 +217,7 @@ impl Cell {
     pub fn of(value: &Value) -> Option<Self> {
         match value {
             Value::Null => None,
-            Value::Text(text) => {
+            Value::Text(text) | Value::Number(text) => {
                 let Some((cut_at, _)) = text.char_indices().nth(CELL_TEXT_LIMIT) else {
                     return Some(Self::Text(text.clone()));
                 };
@@ -255,7 +262,7 @@ impl FullValue {
                 null: true,
                 ..Self::default()
             },
-            Value::Text(text) => Self {
+            Value::Text(text) | Value::Number(text) => Self {
                 text: Some(text.clone()),
                 size: text.len() as u32,
                 ..Self::default()
@@ -317,7 +324,7 @@ fn base64(bytes: &[u8]) -> String {
 fn copy_text(value: &Value) -> Option<String> {
     match value {
         Value::Null => None,
-        Value::Text(text) => Some(text.clone()),
+        Value::Text(text) | Value::Number(text) => Some(text.clone()),
         Value::Bytes(bytes) => Some(format!(
             "\\x{}",
             bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()
@@ -403,7 +410,7 @@ pub fn find(page: &Values, text: &str) -> Vec<[u32; 2]> {
     let mut found = Vec::new();
     for (r, row) in page.rows.iter().enumerate() {
         for (c, value) in row.iter().enumerate() {
-            if let Value::Text(t) = value
+            if let Value::Text(t) | Value::Number(t) = value
                 && t.to_lowercase().contains(&needle)
             {
                 found.push([r as u32, c as u32]);
@@ -417,17 +424,31 @@ pub fn find(page: &Values, text: &str) -> Vec<[u32; 2]> {
 pub fn save(value: &Value, path: &std::path::Path) -> std::io::Result<()> {
     match value {
         Value::Null => std::fs::write(path, b""),
-        Value::Text(t) => std::fs::write(path, t.as_bytes()),
+        Value::Text(t) | Value::Number(t) => std::fs::write(path, t.as_bytes()),
         Value::Bytes(b) => std::fs::write(path, b),
     }
 }
 
 impl Session {
-    /// Runs a table page query, keeps the page's full values for the inspector, find and copy, and
-    /// returns its display cells.
-    pub async fn table_page(&mut self, sql: &str) -> Result<GridPage, SessionError> {
+    /// Runs a table page query, keeps the page's full values for the inspector, find, copy and
+    /// editing, and returns its display cells. With `rowid` the query's first column is the row id,
+    /// which is kept apart so column indexes stay those of the table.
+    pub async fn table_page(&mut self, sql: &str, rowid: bool) -> Result<GridPage, SessionError> {
+        if !self.grid_ready {
+            if self.info().engine == Engine::Postgres {
+                // Dates arrive in one form the grid can parse.
+                self.execute("SET DateStyle TO ISO, YMD").await?;
+            }
+            self.grid_ready = true;
+        }
         let started = Instant::now();
-        let values = self.fetch_values(sql).await?;
+        let mut values = self.fetch_values(sql).await?;
+        self.page_rowids = if rowid && !values.columns.is_empty() {
+            values.columns.remove(0);
+            values.rows.iter_mut().map(|row| row.remove(0)).collect()
+        } else {
+            Vec::new()
+        };
         let duration_ms = started.elapsed().as_secs_f64() * 1000.0;
         let page = GridPage {
             columns: values.columns.clone(),
@@ -475,7 +496,7 @@ mod tests {
     #[test]
     fn builds_the_page_query() {
         let sql = query(Some("a > 1"), None)
-            .page_sql(Engine::Postgres, Some("    \"id\""), 50, 100)
+            .page_sql(Engine::Postgres, Some("    \"id\""), None, 50, 100)
             .unwrap();
         assert!(
             sql.contains("FROM\n    \"public\".\"my \"\"table\"\"\""),
@@ -487,7 +508,7 @@ mod tests {
 
         // The user's sort replaces the default one.
         let sql = query(None, Some("name DESC"))
-            .page_sql(Engine::Sqlite, Some("    rowid"), 10, 0)
+            .page_sql(Engine::Sqlite, Some("    rowid"), None, 10, 0)
             .unwrap();
         assert!(sql.contains("ORDER BY\nname DESC"), "{sql}");
         assert!(!sql.contains("rowid"), "{sql}");
@@ -496,7 +517,7 @@ mod tests {
     #[test]
     fn trailing_comments_cannot_swallow_the_paging() {
         let sql = query(Some("a = 1 -- note"), None)
-            .page_sql(Engine::Postgres, None, 50, 0)
+            .page_sql(Engine::Postgres, None, None, 50, 0)
             .unwrap();
         assert!(sql.contains("-- note\n"), "{sql}");
         assert!(sql.contains("LIMIT"), "{sql}");
@@ -513,7 +534,7 @@ mod tests {
             ] {
                 assert!(
                     query(Some(filter), None)
-                        .page_sql(engine, None, 50, 0)
+                        .page_sql(engine, None, None, 50, 0)
                         .is_err(),
                     "{filter}"
                 );
@@ -534,7 +555,7 @@ mod tests {
         // Semicolons inside strings and dollar quotes are fine.
         assert!(
             query(Some("note = 'a;b' OR note = $$c;d$$"), None)
-                .page_sql(Engine::Postgres, None, 50, 0)
+                .page_sql(Engine::Postgres, None, None, 50, 0)
                 .is_ok()
         );
     }

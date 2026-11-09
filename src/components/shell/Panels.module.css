@@ -1,0 +1,123 @@
+.sidePanel,
+.inspector {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: auto;
+    background: var(--color-surface);
+}
+
+.panelHeader {
+    margin: 0;
+    padding: 0 12px;
+    height: 32px;
+    line-height: 32px;
+    flex: none;
+    font-size: var(--font-size-2xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.placeholder {
+    margin: 8px 12px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.sectionList {
+    margin: 0;
+    padding: 0 0 8px;
+    list-style: none;
+}
+
+.sectionLink {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 16px;
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    text-decoration: none;
+}
+
+.sectionLink:hover {
+    background: var(--color-hover);
+}
+
+.sectionLink[aria-current="true"] {
+    background: var(--color-selected);
+    font-weight: 600;
+}
+
+.bottomPanel {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--color-bg);
+}
+
+.bottomHeader {
+    flex: none;
+    display: flex;
+    align-items: center;
+    height: 29px;
+    padding: 0 4px 0 12px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.bottomTabs {
+    flex: 1;
+    display: flex;
+    gap: 18px;
+    height: 100%;
+}
+
+.bottomTab {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.bottomTab:hover {
+    color: var(--color-text);
+}
+
+.bottomTab[aria-selected="true"] {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.iconButton {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+}
+
+.iconButton:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
+}
+
+.bottomContent {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.bottomResult {
+    box-sizing: border-box;
+    height: 100%;
+    padding: 8px;
+}

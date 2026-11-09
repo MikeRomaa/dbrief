@@ -6,7 +6,15 @@
         "useIgnoreFile": true
     },
     "files": {
-        "includes": ["**", "!src/lib/bindings.ts", "!src-tauri/gen", "!target", "!dist", "!**/*.md", "!src-tauri/icons"]
+        "includes": [
+            "**",
+            "!src/lib/ipc/bindings.ts",
+            "!src-tauri/gen",
+            "!target",
+            "!dist",
+            "!**/*.md",
+            "!src-tauri/icons"
+        ]
     },
     "formatter": {
         "enabled": true,

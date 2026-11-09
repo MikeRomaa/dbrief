@@ -196,10 +196,10 @@ fn sqlite_values(row: &SqliteRow) -> Vec<Value> {
             let value = match value.type_info().name() {
                 "INTEGER" => row
                     .try_get_unchecked::<i64, _>(i)
-                    .map(|v| Value::Text(v.to_string())),
+                    .map(|v| Value::Number(v.to_string())),
                 "REAL" => row
                     .try_get_unchecked::<f64, _>(i)
-                    .map(|v| Value::Text(v.to_string())),
+                    .map(|v| Value::Number(v.to_string())),
                 "BLOB" => row.try_get_unchecked::<Vec<u8>, _>(i).map(Value::Bytes),
                 _ => row.try_get_unchecked::<String, _>(i).map(Value::Text),
             };

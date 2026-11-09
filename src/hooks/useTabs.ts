@@ -1,7 +1,6 @@
 import { type Dispatch, useEffect, useReducer, useRef, useState } from "react";
 
-import { backend } from "@/lib/backend";
-import { debounce } from "@/lib/debounce";
+import { backend } from "@/lib/ipc/backend";
 import {
     deserializeTabs,
     EMPTY_TABS,
@@ -10,7 +9,8 @@ import {
     type TabsAction,
     type TabsState,
     tabsReducer,
-} from "@/lib/tabs";
+} from "@/lib/tabs/tabs";
+import { debounce } from "@/lib/util/debounce";
 
 /** Open tabs, restored on launch and saved to `ui_state` as they change. */
 export function useTabs(): { tabs: TabsState; dispatch: Dispatch<TabsAction>; loaded: boolean } {

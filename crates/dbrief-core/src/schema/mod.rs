@@ -137,6 +137,50 @@ pub async fn structure(
     }
 }
 
+/// Row identity and columns of a table, for editing it in the grid. Views, RO connections and
+/// tables whose rows can't be told apart are read-only, with the reason.
+pub async fn edit_info(
+    session: &mut Session,
+    object: &ObjectRef,
+) -> Result<crate::edit::EditInfo, SessionError> {
+    let (columns, candidates, rowid_table) = match session.info().engine {
+        Engine::Postgres => {
+            let (columns, candidates) = postgres::edit_facts(session, object).await?;
+            (columns, candidates, false)
+        }
+        Engine::Sqlite => sqlite::edit_facts(session, object).await?,
+    };
+    if columns.is_empty() {
+        return Err(not_found(object));
+    }
+
+    let mut read_only = match object.kind {
+        ObjectKind::Table => None,
+        ObjectKind::View => Some("Views are read-only.".to_owned()),
+        ObjectKind::MaterializedView => Some("Materialized views are read-only.".to_owned()),
+        _ => Some("Only tables can be edited.".to_owned()),
+    };
+    if read_only.is_none() && session.info().access_level == crate::connections::AccessLevel::Ro {
+        read_only = Some("The connection is read-only (RO).".to_owned());
+    }
+    let identity = read_only
+        .is_none()
+        .then(|| crate::edit::pick_identity(&candidates, &columns, rowid_table))
+        .flatten();
+    if read_only.is_none() && identity.is_none() {
+        read_only = Some(
+            "Read-only: no primary key or unique index on non-null columns, so rows can't be told apart."
+                .to_owned(),
+        );
+    }
+
+    Ok(crate::edit::EditInfo {
+        identity,
+        read_only,
+        columns,
+    })
+}
+
 /// The SQL that creates the object (with a table's indexes and triggers).
 pub async fn ddl(session: &mut Session, object: &ObjectRef) -> Result<String, SessionError> {
     match session.info().engine {

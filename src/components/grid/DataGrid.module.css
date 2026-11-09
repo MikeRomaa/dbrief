@@ -1,0 +1,244 @@
+.scroll {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    background: var(--color-bg);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+}
+
+.scroll:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--color-changed);
+}
+
+.canvas {
+    position: relative;
+}
+
+/* Header and row numbers stay put while the grid scrolls. */
+.headerRow {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 28px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.corner {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    height: 100%;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+}
+
+.header {
+    position: absolute;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 8px;
+    border-right: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+
+.header:hover {
+    background: var(--color-hover);
+}
+
+.header[data-drop="before"] {
+    box-shadow: inset 2px 0 0 var(--color-changed);
+}
+
+.header[data-drop="after"] {
+    box-shadow: inset -2px 0 0 var(--color-changed);
+}
+
+.headerName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.headerType {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-text-faint);
+    font-size: var(--font-size-2xs);
+    font-weight: 400;
+    text-overflow: ellipsis;
+}
+
+.key {
+    flex: none;
+    color: var(--color-warning);
+}
+
+.sort {
+    flex: none;
+    color: var(--color-changed);
+}
+
+.sortPosition {
+    flex: none;
+    color: var(--color-changed);
+    font-size: var(--font-size-2xs);
+}
+
+.resize {
+    position: absolute;
+    top: 0;
+    z-index: 1;
+    width: 6px;
+    height: 28px;
+    cursor: col-resize;
+}
+
+.resize:hover {
+    background: var(--color-changed);
+    opacity: 0.4;
+}
+
+.row {
+    position: absolute;
+    left: 0;
+    height: 24px;
+}
+
+.rowNumber {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    height: 24px;
+    padding: 0 8px;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-faint);
+    font-size: var(--font-size-2xs);
+    line-height: 24px;
+    text-align: right;
+}
+
+.row:hover .rowNumber,
+.row:hover .cell:not([data-selected]):not([data-match]) {
+    background: var(--color-hover);
+}
+
+.cell {
+    position: absolute;
+    top: 0;
+    height: 24px;
+    padding: 0 8px;
+    overflow: hidden;
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text);
+    line-height: 23px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: cell;
+    user-select: none;
+}
+
+.cell[data-numeric] {
+    text-align: right;
+}
+
+/* NULL and binary placeholders never look like real values. */
+.cell[data-kind="null"] {
+    color: var(--color-text-faint);
+    font-style: italic;
+}
+
+.cell[data-null-style="blank"] {
+    background: repeating-linear-gradient(-45deg, transparent 0 4px, var(--color-selected) 4px 5px);
+}
+
+.cell[data-kind="binary"] {
+    color: var(--color-text-muted);
+}
+
+.cell[data-match] {
+    background: var(--color-warning-bg);
+}
+
+.cell[data-current-match] {
+    box-shadow: inset 0 0 0 2px var(--color-warning);
+}
+
+.cell[data-selected] {
+    background: var(--color-changed-bg);
+}
+
+.cell[data-active] {
+    box-shadow: inset 0 0 0 2px var(--color-changed);
+}
+
+.empty {
+    position: absolute;
+    top: 40px;
+    margin: 0;
+    color: var(--color-text-faint);
+    font-family: var(--font-ui);
+    text-align: center;
+}
+
+.scroll[data-capped] {
+    flex: none;
+}
+
+/* Staged changes: edited cells, inserted and deleted rows. The gutter glyphs (+, −) and the cell
+   corner mark carry the state as well as color. */
+.cell[data-edited] {
+    background: var(--color-changed-bg);
+    color: var(--color-changed);
+}
+
+.cell[data-edited]::after {
+    position: absolute;
+    top: 0;
+    right: 0;
+    border-top: 6px solid var(--color-changed);
+    border-left: 6px solid transparent;
+    content: "";
+}
+
+.cell[data-kind="default"] {
+    color: var(--color-text-faint);
+    font-style: italic;
+}
+
+.row[data-state="updated"] .rowNumber {
+    color: var(--color-changed);
+}
+
+.row[data-state="inserted"] .rowNumber,
+.row[data-state="inserted"] .cell:not([data-selected]) {
+    background: var(--color-added-bg);
+    color: var(--color-added);
+}
+
+.row[data-state="inserted"] .cell[data-kind="default"],
+.row[data-state="inserted"] .cell[data-kind="null"] {
+    color: var(--color-text-faint);
+}
+
+.row[data-state="deleted"] .rowNumber,
+.row[data-state="deleted"] .cell:not([data-selected]) {
+    background: var(--color-removed-bg);
+    color: var(--color-removed);
+}
+
+.row[data-state="deleted"] .cell {
+    text-decoration: line-through;
+}

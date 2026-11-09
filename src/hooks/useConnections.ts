@@ -1,10 +1,10 @@
 import { homeDir } from "@tauri-apps/api/path";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { backend, errorMessage } from "@/lib/backend";
-import type { SessionInfo } from "@/lib/bindings";
-import { events } from "@/lib/bindings";
-import { type ConnectionTree, indexTree, type SortOrder, type TreeIndex } from "@/lib/connectionTree";
+import { type ConnectionTree, indexTree, type SortOrder, type TreeIndex } from "@/lib/connections/connectionTree";
+import { backend, errorMessage } from "@/lib/ipc/backend";
+import type { SessionInfo } from "@/lib/ipc/bindings";
+import { events } from "@/lib/ipc/bindings";
 
 /** `ui_state` keys for the view's preferences. */
 const COLLAPSED_KEY = "connections.collapsed";

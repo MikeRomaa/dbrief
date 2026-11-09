@@ -51,11 +51,11 @@ dbrief/
 │       └── src/
 ├── src-tauri/              # Tauri app crate: thin commands calling dbrief-core
 ├── src/                    # React frontend
-│   ├── shell/              # layout regions
-│   ├── theme/              # tokens.css, theme logic
-│   ├── hooks/              # React hooks (layout, settings, window size)
-│   └── lib/                # pure logic (tested with Vitest)
-├── tests/                  # Vitest tests, mirroring src/ (e.g. tests/lib/commands.test.ts)
+│   ├── components/<area>/  # modules that render components (shell, grid, ui, …), with their CSS modules
+│   ├── hooks/              # every React hook
+│   ├── lib/<area>/         # modules that don't render (tested with Vitest)
+│   └── theme/              # tokens.css, global.css
+├── tests/                  # Vitest tests, mirroring src/ (e.g. tests/lib/shell/commands.test.ts)
 ├── package.json
 ├── biome.json
 └── plans/
@@ -133,12 +133,12 @@ dbrief/
    - Settings rail item opens a minimal Settings view with the Theme control (Light / Dark / System cards from the mockup).
 
 8. **Layout persistence**
-   - Layout state lives in `src/lib/layout.ts` as plain logic (sizes, clamping, collapsed flags, active rail item).
+   - Layout state lives in `src/lib/shell/layout.ts` as plain logic (sizes, clamping, collapsed flags, active rail item).
    - Saved to `ui_state` (debounced) and restored on launch.
    - Vitest tests for clamping and serialization.
 
 9. **Keyboard and accessibility basics**
-   - Small command registry in `src/lib/commands.ts`: each command has an id, label and default shortcut (⌘ on macOS, Ctrl elsewhere).
+   - Small command registry in `src/lib/shell/commands.ts`: each command has an id, label and default shortcut (⌘ on macOS, Ctrl elsewhere).
    - Register the layout toggles and rail switching as commands.
    - Visible focus styles; ARIA roles and labels on rail, panels, splitters (`role="separator"` with arrow-key resizing).
    - Vitest tests for shortcut matching per platform.

@@ -64,7 +64,7 @@ Fixed regions:
 | Side panel    | 248px (resizable 200 to 420) | Whatever the rail selects                                                                                                   |
 | Editor groups | flex, min 320px each         | Tabs hold tables, scripts, structure, diagrams. Up to two groups, side by side or stacked. Drag a tab to the edge to split. |
 | Bottom panel  | 220px, collapses to 30px     | Results, Staged changes, Log, History. Shared by all groups.                                                                |
-| Inspector     | 300px, optional              | Context for the selection: cell value, row details, object properties, connection settings                                  |
+| Inspector     | 300px (resizable 240 to 640), optional | Context for the selection: cell value, row details, object properties, connection settings                                  |
 | Status bar    | 24px                         | Panel toggles (side panel on the left; bottom panel and inspector on the right), connection, access level, cursor position, staged count, encoding |
 
 Preset compositions: Table editing, Script with inline results, Compare (two groups), Diagram (full-bleed canvas), Focus (editor only).
@@ -182,7 +182,7 @@ Sessions and concurrency:
   - Binary (bytea / BLOB) shows its size (e.g. `<binary 14 kB>`); the inspector shows a hex preview and can download to or upload from a file.
   - Binary values that are PNG or JPEG images show an image preview.
 - **Staged editing:** edits, inserts and deletes are staged and marked per row before commit.
-- **Row identity:** editing needs a primary key, or else a unique index. Tables with neither are read-only, and the grid says why.
+- **Row identity:** editing needs a primary key, or else a unique index on non-null columns, or (SQLite) the table's rowid. Other tables and views are read-only, and the grid says why.
 - **Type-aware cell editors** for each data type:
   - Text: inline text input
   - Number: numeric input with validation
@@ -193,6 +193,7 @@ Sessions and concurrency:
 - Any nullable cell can be set to NULL; inserted rows show column defaults. NULL and default values look different from real values.
 - Staged changes bar: count summary, Review SQL, Revert all, Commit (⌘S).
 - Commit runs **all staged changes in one transaction**. Any failure rolls back everything, and the changes stay staged.
+- In manual transaction mode the button reads **Apply**: the changes run inside the tab's open transaction (under a savepoint, so a failure undoes only that batch), and Commit / Roll back in the toolbar end the transaction.
 
 ## 4. Script (SQL editor)
 

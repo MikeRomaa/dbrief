@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { backend, errorMessage } from "@/lib/backend";
-import { events, type ScriptNode } from "@/lib/bindings";
+import { backend, errorMessage } from "@/lib/ipc/backend";
+import { events, type ScriptNode } from "@/lib/ipc/bindings";
 
 /**
  * The scripts folder as a tree, reloaded when files change on disk. `onChange` hears about every

@@ -296,6 +296,7 @@ pub async fn table_page(
     session_id: Uuid,
     kind: ObjectKind,
     query: TableQuery,
+    rowid: Option<String>,
     limit: u32,
     offset: f64,
 ) -> Result<TablePage> {
@@ -307,10 +308,11 @@ pub async fn table_page(
     let sql = query.page_sql(
         info.engine,
         default.as_deref(),
+        rowid.as_deref(),
         limit,
         offset.max(0.0) as u64,
     )?;
-    let page = session.table_page(&sql).await?;
+    let page = session.table_page(&sql, rowid.is_some()).await?;
     Ok(TablePage {
         page,
         sql,

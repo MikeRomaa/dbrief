@@ -38,6 +38,8 @@ page_size = 200
 null_display = "null"
 # Characters of a JSON value shown in a grid cell; the inspector shows all of it.
 json_truncation = 100
+# How dates and times show in the grid: "iso" (2026-11-07 14:03:05) or "locale" (the system's format).
+date_format = "iso"
 "#;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,6 +80,16 @@ pub enum NullDisplay {
     Blank,
 }
 
+/// How dates and times show in the data grid. Edits are always written as ISO text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "lowercase")]
+pub enum DateFormat {
+    #[default]
+    Iso,
+    Locale,
+}
+
 /// Editor settings. `scripts_folder` is an absolute path, empty until chosen on first launch.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -109,6 +121,7 @@ pub struct DataGrid {
     pub page_size: u32,
     pub null_display: NullDisplay,
     pub json_truncation: u32,
+    pub date_format: DateFormat,
 }
 
 impl Default for DataGrid {
@@ -117,6 +130,7 @@ impl Default for DataGrid {
             page_size: 200,
             null_display: NullDisplay::default(),
             json_truncation: 100,
+            date_format: DateFormat::default(),
         }
     }
 }

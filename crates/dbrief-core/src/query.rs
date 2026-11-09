@@ -12,7 +12,7 @@ use sqlx::Either;
 use sqlx::postgres::{PgDatabaseError, PgErrorPosition};
 
 /// A result column and its database type name (e.g. `int4`, `TEXT`).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Column {
     pub name: String,
@@ -22,19 +22,22 @@ pub struct Column {
 /// One row as display text; `None` is SQL NULL.
 pub type Row = Vec<Option<String>>;
 
-/// A value read by the app's own queries (schema loading, table pages): text, or the raw bytes of a
-/// binary value (PostgreSQL `bytea`, SQLite BLOB).
+/// A value read by the app's own queries (schema loading, table pages): text, a number SQLite stored
+/// as INTEGER or REAL (kept apart so it can be written back with the same storage class), or the raw
+/// bytes of a binary value (PostgreSQL `bytea`, SQLite BLOB). PostgreSQL values are always text.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
     Null,
     Text(String),
+    Number(String),
     Bytes(Vec<u8>),
 }
 
 impl Value {
+    /// Text and numbers as text.
     pub fn as_text(&self) -> Option<&str> {
         match self {
-            Self::Text(t) => Some(t),
+            Self::Text(t) | Self::Number(t) => Some(t),
             _ => None,
         }
     }
@@ -43,7 +46,7 @@ impl Value {
     pub fn into_text(self) -> Option<String> {
         match self {
             Self::Null => None,
-            Self::Text(t) => Some(t),
+            Self::Text(t) | Self::Number(t) => Some(t),
             Self::Bytes(b) => Some(b.iter().map(|b| format!("{b:02x}")).collect()),
         }
     }

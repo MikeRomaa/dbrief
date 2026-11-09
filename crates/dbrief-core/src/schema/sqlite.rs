@@ -5,6 +5,7 @@ use super::{
     ConstraintInfo, IndexInfo, ObjectKind, ObjectRef, SchemaColumn, SchemaObject, Snapshot,
     TableStructure, TriggerInfo, not_found, quote_ident, quote_literal, records,
 };
+use crate::edit::{EditColumn, KeyCandidate};
 use crate::session::{Session, SessionError};
 
 pub(super) async fn load(session: &mut Session) -> Result<Snapshot, SessionError> {
@@ -372,4 +373,91 @@ pub(super) async fn ddl(session: &mut Session, object: &ObjectRef) -> Result<Str
         return Err(not_found(object));
     }
     Ok(statements.join("\n"))
+}
+
+/// Columns and unique indexes of a table, for editing (see `edit`), and whether it is a rowid table
+/// (not `WITHOUT ROWID`, not virtual).
+pub(super) async fn edit_facts(
+    session: &mut Session,
+    object: &ObjectRef,
+) -> Result<(Vec<EditColumn>, Vec<KeyCandidate>, bool), SessionError> {
+    let db = quote_literal(&object.schema);
+    let table = quote_literal(&object.name);
+
+    let listed = session
+        .fetch_values(&format!(
+            "SELECT type, wr FROM pragma_table_list WHERE schema = {db} AND name = {table}"
+        ))
+        .await?;
+    let rowid_table = records(&listed)
+        .next()
+        .is_some_and(|r| r.string("type") == "table" && r.int("wr") == Some(0));
+
+    let values = session
+        .fetch_values(&format!(
+            "SELECT name, type, \"notnull\", dflt_value, pk, hidden FROM pragma_table_xinfo({table}, {db}) WHERE hidden <> 1 ORDER BY cid"
+        ))
+        .await?;
+    let mut primary: Vec<(i64, String)> = Vec::new();
+    let columns = records(&values)
+        .map(|r| {
+            let pk = r.int("pk").unwrap_or_default();
+            let name = r.string("name");
+            if pk > 0 {
+                primary.push((pk, name.clone()));
+            }
+            let type_name = r.string("type");
+            EditColumn {
+                name,
+                base_type: type_name.clone(),
+                type_name,
+                nullable: !r.bool("notnull") && pk == 0,
+                default_value: r.text("dflt_value"),
+                // 2 and 3 are generated columns (virtual and stored).
+                writable: !matches!(r.int("hidden"), Some(2 | 3)),
+            }
+        })
+        .collect();
+
+    let mut candidates = Vec::new();
+    if !primary.is_empty() {
+        primary.sort();
+        candidates.push(KeyCandidate {
+            name: "primary key".into(),
+            primary: true,
+            partial: false,
+            columns: Some(primary.into_iter().map(|(_, name)| name).collect()),
+        });
+    }
+
+    let indexes = session
+        .fetch_values(&format!(
+            "SELECT name, partial FROM pragma_index_list({table}, {db}) WHERE \"unique\" = 1 AND origin <> 'pk'"
+        ))
+        .await?;
+    for index in records(&indexes).collect::<Vec<_>>() {
+        let name = index.string("name");
+        let keys = session
+            .fetch_values(&format!(
+                "SELECT cid, name FROM pragma_index_xinfo({}, {db}) WHERE key = 1 ORDER BY seqno",
+                quote_literal(&name)
+            ))
+            .await?;
+        let mut columns = Vec::new();
+        let mut expressions = false;
+        for key in records(&keys) {
+            if key.int("cid").unwrap_or(-2) < 0 {
+                expressions = true;
+            }
+            columns.push(key.string("name"));
+        }
+        candidates.push(KeyCandidate {
+            name,
+            primary: false,
+            partial: index.bool("partial"),
+            columns: (!expressions).then_some(columns),
+        });
+    }
+
+    Ok((columns, candidates, rowid_table))
 }

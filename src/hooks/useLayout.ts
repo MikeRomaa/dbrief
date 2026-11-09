@@ -1,8 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { type Dispatch, useEffect, useReducer, useRef, useState } from "react";
 
-import { backend } from "@/lib/backend";
-import { debounce } from "@/lib/debounce";
+import { backend } from "@/lib/ipc/backend";
 import {
     DEFAULT_LAYOUT,
     deserializeLayout,
@@ -11,7 +10,8 @@ import {
     type LayoutState,
     layoutReducer,
     serializeLayout,
-} from "@/lib/layout";
+} from "@/lib/shell/layout";
+import { debounce } from "@/lib/util/debounce";
 
 const SAVE_DELAY_MS = 400;
 

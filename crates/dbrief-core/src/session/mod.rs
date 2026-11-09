@@ -3,11 +3,14 @@
 //! with an SSH tunnel owns the tunnel: it opens with the session, is reopened on reconnect if it
 //! dropped, and closes with the session.
 
+mod apply;
 mod run;
 mod target;
 mod transaction;
 mod values;
 
+#[cfg(test)]
+mod apply_tests;
 #[cfg(test)]
 mod run_tests;
 #[cfg(test)]
@@ -21,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+pub use apply::{ApplyOutcome, ApplyState, EditFailure, StagedFile};
 pub use run::{CancelHandle, MoreRows, RunError, RunOutput};
 pub use target::{ConnectTarget, Credentials, DEFAULT_CONNECT_TIMEOUT};
 pub use transaction::{TransactionMode, TransactionStatement};
@@ -196,8 +200,14 @@ pub struct Session {
     transaction: Vec<TransactionStatement>,
     in_transaction: bool,
     transaction_lost: bool,
-    /// Full values of the last table page (see `grid`).
+    /// Full values of the last table page (see `grid`), and the SQLite rowid of each of its rows
+    /// when the table is edited through its rowid.
     pub(crate) page: Option<crate::query::Values>,
+    pub(crate) page_rowids: Vec<crate::query::Value>,
+    /// Binary values uploaded from files for staged edits, by token (see `edit`).
+    pub(crate) uploads: HashMap<String, Vec<u8>>,
+    /// Whether this connection has had the settings table pages need (PostgreSQL `DateStyle`).
+    pub(crate) grid_ready: bool,
 }
 
 impl Session {
@@ -255,6 +265,9 @@ impl Session {
             in_transaction: false,
             transaction_lost: false,
             page: None,
+            page_rowids: Vec::new(),
+            uploads: HashMap::new(),
+            grid_ready: false,
         })
     }
 
@@ -323,6 +336,7 @@ impl Session {
             self.tunnel.as_ref().map(|t| t.endpoint().clone()),
         );
         self.conn = Some(conn);
+        self.grid_ready = false;
         Ok(())
     }
 

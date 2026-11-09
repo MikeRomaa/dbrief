@@ -1,0 +1,111 @@
+.statusBar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 24px;
+    padding: 0 4px;
+    font-family: var(--font-mono);
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-2xs);
+    white-space: nowrap;
+}
+
+.spacer {
+    flex: 1;
+}
+
+.status {
+    display: flex;
+    gap: 12px;
+    min-width: 0;
+}
+
+.warning {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-width: 60vw;
+    padding: 0 6px;
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+}
+
+.warningText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.item {
+    flex: none;
+}
+
+.toggles {
+    display: flex;
+    gap: 2px;
+}
+
+.toggle {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-faint);
+}
+
+.toggle:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
+}
+
+.toggle[aria-pressed="true"] {
+    color: var(--color-text);
+}
+
+/* The active connection's color tag tints the bar ("Highlight production"). */
+.statusBar[data-tinted] {
+    background: color-mix(in srgb, var(--bar-tint) 18%, var(--color-surface));
+    border-top-color: color-mix(in srgb, var(--bar-tint) 60%, var(--color-border));
+    color: var(--color-text);
+}
+
+.connection {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.connected,
+.disconnected {
+    flex: none;
+    width: 6px;
+    height: 6px;
+}
+
+.connected {
+    background: var(--color-added);
+}
+
+.disconnected {
+    border: 1px solid var(--color-text-faint);
+}
+
+.staged {
+    flex: none;
+    padding: 0 4px;
+    border: none;
+    background: none;
+    color: var(--color-changed);
+    font: inherit;
+    cursor: pointer;
+}
+
+.staged:hover {
+    text-decoration: underline;
+}

@@ -39,7 +39,7 @@ Only the **next** milestone gets a detailed plan (`plans/3-…`, `plans/4-…`, 
 | 2   | Connections + first launch | `4-connections.md`   | Built   |
 | 3   | Script editor              | `5-script-editor.md` | Built   |
 | 4   | Explorer + table browse    | `6-explorer.md`      | Built   |
-| 5   | Grid editing               | not written          |         |
+| 5   | Grid editing               | `7-grid-editing.md`  | Planned |
 | 6   | History                    | not written          |         |
 | 7   | Diagrams                   | not written          |         |
 | 8   | Explain                    | not written          |         |
