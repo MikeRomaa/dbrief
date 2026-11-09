@@ -129,8 +129,67 @@ export function buildRows(
     return rows;
 }
 
+/** One open connection as the Explorer lists it, with its tree state. */
+export interface ExplorerConnection {
+    id: string;
+    name: string;
+    engine: Engine;
+    /** A line shown under the connection, such as "Loading the schema…" or a load error. */
+    status: string | null;
+    objects: SchemaObject[];
+    expanded: ReadonlySet<string>;
+    columns: ReadonlyMap<string, SchemaColumn[]>;
+}
+
+/**
+ * A row of the whole Explorer: a connection, or a row of its tree one level down. `key` is unique
+ * across connections; `id` is the row's id within its connection's tree.
+ */
+export type ForestRow = (
+    | { type: "connection"; id: string; level: number; connection: ExplorerConnection; expanded: boolean }
+    | ExplorerRow
+) & { key: string; connectionId: string };
+
+/**
+ * Builds the visible rows of every listed connection, each tree under its connection's row.
+ * `collapsed` holds the ids of collapsed connections; a filter opens them all and leaves out
+ * connections with no match.
+ */
+export function buildForest(
+    connections: ExplorerConnection[],
+    collapsed: ReadonlySet<string>,
+    filter: string,
+): ForestRow[] {
+    const needle = filter.trim();
+    const rows: ForestRow[] = [];
+    for (const connection of connections) {
+        const tree = buildRows(connection.objects, connection.engine, connection.expanded, connection.columns, filter);
+        if (needle && tree.length === 0) continue;
+        const open = !!needle || !collapsed.has(connection.id);
+        const connectionId = connection.id;
+        rows.push({
+            type: "connection",
+            id: connectionId,
+            level: 1,
+            connection,
+            expanded: open,
+            key: connectionId,
+            connectionId,
+        });
+        if (!open) continue;
+        if (connection.status) {
+            const id = `${connectionId}:status`;
+            rows.push({ type: "note", id, level: 2, text: connection.status, key: id, connectionId });
+        }
+        for (const row of tree) {
+            rows.push({ ...row, level: row.level + 1, key: `${connectionId}/${row.id}`, connectionId });
+        }
+    }
+    return rows;
+}
+
 /** The row's parent, for Left (collapse or go to parent) in the tree. */
-export function parentIndex(rows: ExplorerRow[], index: number): number {
+export function parentIndex(rows: readonly { level: number }[], index: number): number {
     const level = rows[index]?.level ?? 1;
     for (let i = index - 1; i >= 0; i--) {
         if ((rows[i]?.level ?? 0) < level) return i;

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRows, defaultExpanded, groupId, objectId, parentIndex, schemaId } from "@/lib/explorer/tree";
+import {
+    buildForest,
+    buildRows,
+    defaultExpanded,
+    type ExplorerConnection,
+    groupId,
+    objectId,
+    parentIndex,
+    schemaId,
+} from "@/lib/explorer/tree";
 import type { SchemaColumn, SchemaObject } from "@/lib/ipc/bindings";
 
 const obj = (schema: string, name: string, kind: SchemaObject["kind"]): SchemaObject => ({
@@ -72,5 +81,42 @@ describe("explorer tree", () => {
         expect(labels(rows)).toEqual(["G table (1)", "O t", "G index (1)", "S archive"]);
         expect(parentIndex(rows, 1)).toBe(0);
         expect(parentIndex(rows, 0)).toBe(-1);
+    });
+
+    describe("forest", () => {
+        const conn = (id: string, status: string | null = null): ExplorerConnection => ({
+            id,
+            name: id,
+            engine: "postgres",
+            status,
+            objects: pg,
+            expanded: new Set([schemaId("billing")]),
+            columns: new Map(),
+        });
+
+        it("puts each connection's tree one level under it, with unique keys", () => {
+            const rows = buildForest([conn("a", "Loading the schema…"), conn("b")], new Set(["b"]), "");
+            expect(rows.map((r) => `${r.level} ${r.key}`)).toEqual([
+                "1 a",
+                "2 a:status",
+                "2 a/s:billing",
+                "3 a/g:billing:table",
+                "2 a/s:empty",
+                "2 a/s:public",
+                "1 b",
+            ]);
+            expect(rows.every((r) => r.connectionId === r.key.split(/[/:]/)[0])).toBe(true);
+        });
+
+        it("filters across connections and leaves out those without a match", () => {
+            const other = { ...conn("b"), objects: [obj("public", "public", "schema"), obj("public", "x", "table")] };
+            const rows = buildForest([conn("a"), other], new Set(["a"]), "invoice");
+            expect(rows.map((r) => r.key)).toEqual([
+                "a",
+                "a/s:billing",
+                "a/g:billing:table",
+                "a/o:billing:table:invoices:",
+            ]);
+        });
     });
 });

@@ -26,8 +26,9 @@ import { useSettings } from "@/hooks/useSettings";
 import { useStore } from "@/hooks/useStore";
 import { useTabs } from "@/hooks/useTabs";
 import { useWindowHeight, useWindowWidth } from "@/hooks/useWindowSize";
-import { activeConnection, explorerConnection } from "@/lib/connections/activeConnection";
+import { activeConnection } from "@/lib/connections/activeConnection";
 import { colorTagVar, plural } from "@/lib/connections/connectionFormat";
+import { revealConnection } from "@/lib/explorer/reveal";
 import { listenForSchemaChanges } from "@/lib/schema/schemaStore";
 import { createCommandRegistry } from "@/lib/shell/commands";
 import {
@@ -306,7 +307,7 @@ export function Shell() {
                             connections={connections}
                             scripts={scriptTree.tree}
                             onOpenConnection={(id) => {
-                                explorerConnection.set(id);
+                                revealConnection.set(id);
                                 dispatch({ type: "openRailItem", item: "explorer" });
                                 const connection = connections.index.connections.get(id);
                                 const connected = connections.sessions.some(

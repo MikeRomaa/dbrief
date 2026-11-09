@@ -16,19 +16,30 @@ import {
 } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { EngineIcon } from "@/components/ui/EngineIcon";
 import { ContextMenu, type MenuEntry } from "@/components/ui/Menu";
-import { Select } from "@/components/ui/Select";
+import { useCommands } from "@/hooks/useCommands";
 import { useConnectFlow } from "@/hooks/useConnectFlow";
 import type { ConnectionsState } from "@/hooks/useConnections";
-import { useSchema } from "@/hooks/useSchema";
 import { useStore } from "@/hooks/useStore";
-import { explorerConnection } from "@/lib/connections/activeConnection";
-import { folderPath } from "@/lib/connections/connectionTree";
-import { buildRows, defaultExpanded, type ExplorerRow, GROUP_LABELS, objectId, parentIndex } from "@/lib/explorer/tree";
+import { activeConnection } from "@/lib/connections/activeConnection";
+import { colorTagVar } from "@/lib/connections/connectionFormat";
+import { confirmDisconnect } from "@/lib/connections/disconnect";
+import { revealConnection } from "@/lib/explorer/reveal";
+import {
+    buildForest,
+    defaultExpanded,
+    type ExplorerConnection,
+    type ForestRow,
+    GROUP_LABELS,
+    objectId,
+    parentIndex,
+} from "@/lib/explorer/tree";
 import { backend, errorMessage } from "@/lib/ipc/backend";
 import type { ObjectKind, SchemaColumn, SchemaObject } from "@/lib/ipc/bindings";
-import { refreshSchema, tableColumns } from "@/lib/schema/schemaStore";
+import { ensureSchema, refreshSchema, schemaStore, tableColumns } from "@/lib/schema/schemaStore";
 import { log } from "@/lib/shell/log";
+import { RAIL_COMMANDS } from "@/lib/shell/shellCommands";
 import { tooltip } from "@/lib/shell/tooltip";
 import { displayName, type TableRef } from "@/lib/tabs/tableTabs";
 import { compactCount, formatBytes, formatCount } from "@/lib/util/numbers";
@@ -38,9 +49,8 @@ import panels from "@/components/shell/Panels.module.css";
 import controls from "@/components/ui/controls.module.css";
 
 /**
- * The Explorer side panel: the cached schema of one connection as a tree, with a filter, row count
- * estimates and sizes, and a context menu. Works from the cache while disconnected; actions that
- * need the database connect first.
+ * The Explorer side panel: every connected connection as a top-level node over its schema tree,
+ * with a filter, row count estimates and sizes, and context menus. Disconnecting removes it.
  */
 interface ExplorerPanelProps {
     connections: ConnectionsState;
@@ -62,47 +72,103 @@ const OBJECT_ICONS: Record<ObjectKind, ReactNode> = {
 
 const opensAsTable = (kind: ObjectKind) => kind === "table" || kind === "view" || kind === "materialized-view";
 
+/** Per-connection state that a schema reload (a new version) drops. */
+type Versioned<T> = ReadonlyMap<string, { version: number; map: ReadonlyMap<string, T> }>;
+
+const EMPTY = new Map<never, never>();
+
+function versioned<T>(all: Versioned<T>, id: string, version: number): ReadonlyMap<string, T> {
+    const entry = all.get(id);
+    return entry && entry.version === version ? entry.map : EMPTY;
+}
+
+function withEntry<T>(all: Versioned<T>, id: string, version: number, key: string, value: T): Versioned<T> {
+    const map = new Map(versioned(all, id, version)).set(key, value);
+    return new Map(all).set(id, { version, map });
+}
+
 export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) {
-    const chosen = useStore(explorerConnection);
-    const connectionId = chosen && connections.index.connections.has(chosen) ? chosen : null;
-    const connection = connectionId ? connections.index.connections.get(connectionId) : undefined;
-    const engine = connection?.engine ?? "postgres";
-    const schema = useSchema(connectionId);
-    const connected = connections.sessions.some((s) => s.background && s.connection_id === connectionId);
+    const commands = useCommands();
+    const activeId = useStore(activeConnection);
+    const schemas = useStore(schemaStore);
+    const reveal = useStore(revealConnection);
 
     const [filter, setFilter] = useState("");
-    const [expandedBy, setExpandedBy] = useState<Map<string, Set<string>>>(new Map());
-    const [columns, setColumns] = useState<Map<string, SchemaColumn[]>>(new Map());
-    const [counts, setCounts] = useState<Map<string, number>>(new Map());
-    const [active, setActive] = useState(0);
-    const [menu, setMenu] = useState<{ x: number; y: number; row: ExplorerRow } | null>(null);
+    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+    const [expandedBy, setExpandedBy] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
+    const [columns, setColumns] = useState<Versioned<SchemaColumn[]>>(new Map());
+    const [counts, setCounts] = useState<Versioned<number>>(new Map());
+    const [activeKey, setActiveKey] = useState<string | null>(null);
+    const [menu, setMenu] = useState<{ x: number; y: number; row: ForestRow } | null>(null);
     const [problem, setProblem] = useState<string | null>(null);
     const [scroll, setScroll] = useState({ top: 0, height: 400 });
     const listRef = useRef<HTMLDivElement>(null);
     const connectFlow = useConnectFlow(connections.persistentSecrets, setProblem);
 
-    const expanded = (connectionId && expandedBy.get(connectionId)) || defaultExpanded(engine);
-    const setExpanded = (next: Set<string>) => {
-        if (connectionId) setExpandedBy((m) => new Map(m).set(connectionId, next));
-    };
+    const isConnected = (id: string) => connections.sessions.some((s) => s.background && s.connection_id === id);
 
-    // Columns come from the cache; a schema reload drops the loaded ones.
-    const version = schema?.version ?? 0;
-    // biome-ignore lint/correctness/useExhaustiveDependencies: reset per connection and schema version
+    // Every connection with an open session.
+    const listedIds = useMemo(() => {
+        const ids = new Set(connections.sessions.filter((s) => s.background).map((s) => s.connection_id));
+        return [...ids]
+            .filter((id) => connections.index.connections.has(id))
+            .sort((a, b) =>
+                (connections.index.connections.get(a)?.name ?? "").localeCompare(
+                    connections.index.connections.get(b)?.name ?? "",
+                ),
+            );
+    }, [connections.sessions, connections.index]);
+
     useEffect(() => {
-        setColumns(new Map());
-        setCounts(new Map());
-    }, [connectionId, version]);
+        for (const id of listedIds) ensureSchema(id);
+    }, [listedIds]);
 
-    const objects = schema?.objects ?? [];
-    const rows = useMemo(
-        () => buildRows(objects, engine, expanded, columns, filter),
-        [objects, engine, expanded, columns, filter],
+    const listed = useMemo<ExplorerConnection[]>(
+        () =>
+            listedIds.flatMap((id) => {
+                const connection = connections.index.connections.get(id);
+                if (!connection) return [];
+                const schema = schemas.get(id);
+                const version = schema?.version ?? 0;
+                const status = schema?.error
+                    ? schema.error
+                    : schema?.loading || !schema?.refreshedAt
+                      ? "Loading the schema…"
+                      : null;
+                return [
+                    {
+                        id,
+                        name: connection.name,
+                        engine: connection.engine,
+                        status,
+                        objects: schema?.objects ?? [],
+                        expanded: expandedBy.get(id) ?? defaultExpanded(connection.engine),
+                        columns: versioned(columns, id, version),
+                    },
+                ];
+            }),
+        [listedIds, connections.index, schemas, expandedBy, columns],
     );
 
+    const rows = useMemo(() => buildForest(listed, collapsed, filter), [listed, collapsed, filter]);
+    const active = Math.max(
+        0,
+        rows.findIndex((r) => r.key === activeKey),
+    );
+    const activeRow = rows[active];
+    const setActive = (index: number) => setActiveKey(rows[Math.max(0, Math.min(rows.length - 1, index))]?.key ?? null);
+
+    // Search asks to show a connection: open it and select it once it is listed.
     useEffect(() => {
-        if (active >= rows.length) setActive(Math.max(0, rows.length - 1));
-    }, [rows.length, active]);
+        if (!reveal || !listedIds.includes(reveal)) return;
+        setCollapsed((c) => {
+            const next = new Set(c);
+            next.delete(reveal);
+            return next;
+        });
+        setActiveKey(reveal);
+        revealConnection.set(null);
+    }, [reveal, listedIds]);
 
     useLayoutEffect(() => {
         const el = listRef.current;
@@ -123,73 +189,106 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
         else if (top + ROW_HEIGHT > el.scrollTop + el.clientHeight) el.scrollTop = top + ROW_HEIGHT - el.clientHeight;
     }, [active]);
 
-    const connect = async () => {
+    const connect = async (id: string) => {
+        const connection = connections.index.connections.get(id);
         if (!connection) return false;
-        if (connected) return true;
+        if (isConnected(id)) return true;
         return (await connectFlow.connect(connection, {}, "background")) !== null;
     };
 
-    const toggle = (row: ExplorerRow) => {
+    const refresh = async (id: string) => {
+        if (await connect(id)) await refreshSchema(id);
+    };
+
+    const disconnect = async (id: string) => {
+        // Tabs with an open transaction on this connection ask to commit or roll back first.
+        if (!(await confirmDisconnect(id))) return;
+        try {
+            await backend.disconnectConnection(id);
+        } catch (e) {
+            setProblem(errorMessage(e));
+        }
+    };
+
+    const toggle = (row: ForestRow) => {
         if (row.type === "column" || row.type === "note") return;
+        if (row.type === "connection") {
+            setCollapsed((c) => {
+                const next = new Set(c);
+                if (row.expanded) next.add(row.id);
+                else next.delete(row.id);
+                return next;
+            });
+            return;
+        }
         if (row.type === "object" && !row.expandable) return;
-        const next = new Set(expanded);
+        const id = row.connectionId;
+        const tree = listed.find((c) => c.id === id);
+        if (!tree) return;
+        const next = new Set(tree.expanded);
         if (next.has(row.id) || (row.type !== "object" && row.expanded)) {
             next.delete(row.id);
         } else {
             next.add(row.id);
-            if (row.type === "object" && connectionId && !columns.has(row.id)) {
+            if (row.type === "object" && !tree.columns.has(row.id)) {
+                const version = schemas.get(id)?.version ?? 0;
                 const { schema: s, name } = row.object;
-                void tableColumns(connectionId, s, name).then((cols) =>
-                    setColumns((m) => new Map(m).set(row.id, cols)),
+                void tableColumns(id, s, name).then((cols) =>
+                    setColumns((m) => withEntry(m, id, version, row.id, cols)),
                 );
             }
         }
-        setExpanded(next);
+        setExpandedBy((m) => new Map(m).set(id, next));
     };
 
-    const tableRef = (object: SchemaObject): TableRef | null =>
-        connectionId && opensAsTable(object.kind)
+    const tableRef = (connectionId: string, object: SchemaObject): TableRef | null =>
+        opensAsTable(object.kind)
             ? { connectionId, schema: object.schema, name: object.name, kind: object.kind }
             : null;
 
-    const open = (row: ExplorerRow, preview: boolean) => {
+    const open = (row: ForestRow, preview: boolean) => {
         if (row.type !== "object") return;
-        const ref = tableRef(row.object);
+        const ref = tableRef(row.connectionId, row.object);
         if (ref) onOpenTable(ref, preview);
     };
 
-    const source = connection?.name ?? "Explorer";
+    const sourceOf = (id: string) => connections.index.connections.get(id)?.name ?? "Explorer";
 
-    const copyDdl = async (object: SchemaObject) => {
-        if (!connectionId || !(await connect())) return;
+    const copyDdl = async (id: string, object: SchemaObject) => {
+        if (!(await connect(id))) return;
         try {
-            const ddl = await backend.objectDdl(connectionId, {
+            const ddl = await backend.objectDdl(id, {
                 schema: object.schema,
                 name: object.name,
                 kind: object.kind,
                 detail: object.detail,
             });
             await navigator.clipboard.writeText(ddl);
-            log({ kind: "background", source, text: `Copied the DDL of ${object.schema}.${object.name}` });
+            log({
+                kind: "background",
+                source: sourceOf(id),
+                text: `Copied the DDL of ${object.schema}.${object.name}`,
+            });
         } catch (e) {
             setProblem(errorMessage(e));
         }
     };
 
-    const countRows = async (object: SchemaObject) => {
-        if (!connectionId || !(await connect())) return;
+    const countRows = async (id: string, object: SchemaObject) => {
+        if (!(await connect(id))) return;
         try {
-            const result = await backend.countRows(connectionId, {
+            const result = await backend.countRows(id, {
                 schema: object.schema,
                 name: object.name,
                 filter: null,
                 order: null,
             });
             const count = result.count ?? 0;
-            setCounts((m) => new Map(m).set(objectId(object), count));
+            const version = schemas.get(id)?.version ?? 0;
+            setCounts((m) => withEntry(m, id, version, objectId(object), count));
             log({
                 kind: "background",
-                source,
+                source: sourceOf(id),
                 text: result.sql.replace(/\s+/g, " ").trim(),
                 detail: `${formatCount(count)} rows, ${Math.round(result.duration_ms ?? 0)} ms`,
             });
@@ -198,7 +297,14 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
         }
     };
 
-    const menuEntries = (row: ExplorerRow): MenuEntry[] => {
+    const menuEntries = (row: ForestRow): MenuEntry[] => {
+        const id = row.connectionId;
+        if (row.type === "connection") {
+            return [
+                { label: "Refresh the schema", onSelect: () => void refresh(id) },
+                { label: "Disconnect", onSelect: () => void disconnect(id) },
+            ];
+        }
         if (row.type === "column") {
             return [
                 {
@@ -209,7 +315,7 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
         }
         if (row.type !== "object") return [];
         const object = row.object;
-        const ref = tableRef(object);
+        const ref = tableRef(id, object);
         const entries: MenuEntry[] = [];
         if (ref) {
             entries.push(
@@ -223,17 +329,17 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
                 label: "Copy name",
                 onSelect: () => void navigator.clipboard.writeText(`${object.schema}.${object.name}`).catch(() => {}),
             },
-            { label: "Copy DDL", onSelect: () => void copyDdl(object) },
+            { label: "Copy DDL", onSelect: () => void copyDdl(id, object) },
         );
-        if (ref) entries.push({ label: "Count rows", onSelect: () => void countRows(object) });
+        if (ref) entries.push({ label: "Count rows", onSelect: () => void countRows(id, object) });
         return entries;
     };
 
     const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-        const row = rows[active];
+        const row = activeRow;
         const move = (to: number) => {
             e.preventDefault();
-            setActive(Math.max(0, Math.min(rows.length - 1, to)));
+            setActive(to);
         };
         switch (e.key) {
             case "ArrowDown":
@@ -256,7 +362,7 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
             case "ArrowLeft":
                 e.preventDefault();
                 if (row && "expanded" in row && row.expanded) toggle(row);
-                else setActive(Math.max(0, parentIndex(rows, active)));
+                else setActive(parentIndex(rows, active));
                 return;
             case "Enter":
                 e.preventDefault();
@@ -279,66 +385,35 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
     };
 
     const openMenuAtActive = () => {
-        const row = rows[active];
+        const row = activeRow;
         const el = row ? document.getElementById(rowId(row)) : null;
         const rect = el?.getBoundingClientRect();
         if (row) setMenu({ x: (rect?.left ?? 0) + 24, y: rect?.bottom ?? 0, row });
     };
 
-    const rowId = (row: ExplorerRow) => `explorer-${connectionId}-${row.id}`;
-
-    const connectionOptions = useMemo(() => {
-        const list = [...connections.index.connections.values()].map((c) => {
-            const folder = folderPath(connections.index, c.folder_id).join(" / ");
-            return { value: c.id, label: folder ? `${folder} / ${c.name}` : c.name };
-        });
-        list.sort((a, b) => a.label.localeCompare(b.label));
-        return [{ value: "", label: "Choose a connection", muted: true }, ...list];
-    }, [connections.index]);
+    const rowId = (row: ForestRow) => `explorer-${row.key}`;
 
     const first = Math.max(0, Math.floor(scroll.top / ROW_HEIGHT) - 10);
     const last = Math.min(rows.length - 1, Math.ceil((scroll.top + scroll.height) / ROW_HEIGHT) + 10);
-    const activeRow = rows[active];
 
-    const status = !connection
-        ? null
-        : schema?.loading || (connected && !schema?.refreshedAt)
-          ? "Loading the schema…"
-          : !connected && schema?.refreshedAt
-            ? `Not connected. Cached ${new Date(schema.refreshedAt).toLocaleString()}.`
-            : !connected
-              ? "Not connected."
-              : null;
+    // The header's Refresh acts on the selected row's connection.
+    const refreshId = activeRow?.connectionId ?? (listedIds.length === 1 ? listedIds[0] : undefined);
+    const refreshName = refreshId ? connections.index.connections.get(refreshId)?.name : undefined;
 
     return (
         <div className={styles.panel}>
-            <h2 className={panels.panelHeader}>Explorer</h2>
-            <div className={styles.controls}>
-                <span id="explorer-connection-label" className="visually-hidden">
-                    Connection
-                </span>
-                <div className={styles.picker}>
-                    <Select
-                        value={connectionId ?? ""}
-                        options={connectionOptions}
-                        labelledBy="explorer-connection-label"
-                        mono
-                        onChange={(id) => explorerConnection.set(id || null)}
-                    />
-                </div>
+            <div className={styles.header}>
+                <h2 className={controls.sectionLabel}>Explorer</h2>
+                <span className={styles.spacer} />
                 <button
                     type="button"
                     className={controls.iconButton}
-                    aria-label="Refresh the schema"
-                    disabled={!connection || schema?.loading}
-                    onClick={() =>
-                        void (async () => {
-                            if (connectionId && (await connect())) await refreshSchema(connectionId);
-                        })()
-                    }
-                    {...tooltip("Refresh the schema")}
+                    aria-label={refreshName ? `Refresh the schema of ${refreshName}` : "Refresh the schema"}
+                    disabled={!refreshId || schemas.get(refreshId)?.loading}
+                    onClick={() => refreshId && void refresh(refreshId)}
+                    {...tooltip(refreshName ? `Refresh the schema of ${refreshName}` : "Refresh the schema")}
                 >
-                    <RefreshCw size={13} />
+                    <RefreshCw size={14} />
                 </button>
             </div>
             <div className={styles.filter}>
@@ -351,7 +426,7 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
                     spellCheck={false}
                     onChange={(e) => {
                         setFilter(e.target.value);
-                        setActive(0);
+                        setActiveKey(null);
                     }}
                     onKeyDown={(e) => {
                         if (e.key === "Escape" && filter) {
@@ -365,31 +440,30 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
                 />
             </div>
 
-            {status && (
-                <div className={styles.status}>
-                    <span>{status}</span>
-                    {!connected && (
-                        <button type="button" className={controls.ghost} onClick={() => void connect()}>
-                            <Plug size={12} />
-                            Connect
-                        </button>
-                    )}
-                </div>
-            )}
-            {(problem || schema?.error) && (
+            {problem && (
                 <p className={controls.error} role="alert">
-                    {problem ?? schema?.error}
+                    {problem}
                 </p>
             )}
 
-            {!connection ? (
-                <p className={panels.placeholder}>Choose a connection to browse its schemas and tables.</p>
+            {listed.length === 0 ? (
+                <div className={styles.empty}>
+                    <p>Open connections and their schemas appear here.</p>
+                    <button
+                        type="button"
+                        className={controls.ghost}
+                        onClick={() => commands.run(RAIL_COMMANDS.connections.id)}
+                    >
+                        <Plug size={12} />
+                        Open Connections
+                    </button>
+                </div>
             ) : (
                 <div
                     ref={listRef}
                     className={styles.tree}
                     role="tree"
-                    aria-label={`${connection.name} schema`}
+                    aria-label="Open connections"
                     aria-activedescendant={activeRow ? rowId(activeRow) : undefined}
                     tabIndex={0}
                     onKeyDown={onKeyDown}
@@ -401,14 +475,26 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
                     <div style={{ height: rows.length * ROW_HEIGHT, position: "relative" }}>
                         {rows.slice(first, last + 1).map((row, k) => {
                             const index = first + k;
+                            const connection =
+                                row.type === "connection" ? connections.index.connections.get(row.id) : undefined;
                             return (
                                 <TreeRow
-                                    key={row.id}
+                                    key={row.key}
                                     id={rowId(row)}
                                     row={row}
                                     top={index * ROW_HEIGHT}
                                     active={index === active}
-                                    count={row.type === "object" ? counts.get(row.id) : undefined}
+                                    current={row.type === "connection" && row.id === activeId}
+                                    colorTag={connection?.color_tag ?? null}
+                                    count={
+                                        row.type === "object"
+                                            ? versioned(
+                                                  counts,
+                                                  row.connectionId,
+                                                  schemas.get(row.connectionId)?.version ?? 0,
+                                              ).get(row.id)
+                                            : undefined
+                                    }
                                     onClick={(e) => {
                                         setActive(index);
                                         if (row.type === "object" && opensAsTable(row.object.kind)) {
@@ -431,15 +517,13 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
                             );
                         })}
                     </div>
-                    {rows.length === 0 && schema?.refreshedAt && (
-                        <p className={panels.placeholder}>{filter ? "No objects match." : "No objects."}</p>
-                    )}
+                    {rows.length === 0 && filter && <p className={panels.placeholder}>No objects match.</p>}
                 </div>
             )}
 
             {menu && (
                 <ContextMenu
-                    label="Object"
+                    label={menu.row.type === "connection" ? "Connection" : "Object"}
                     at={menu}
                     entries={menuEntries(menu.row)}
                     onClose={() => setMenu(null)}
@@ -453,17 +537,23 @@ export function ExplorerPanel({ connections, onOpenTable }: ExplorerPanelProps) 
 
 interface TreeRowProps {
     id: string;
-    row: ExplorerRow;
+    row: ForestRow;
     top: number;
     active: boolean;
+    current: boolean;
+    colorTag: string | null;
     count: number | undefined;
     onClick: (e: React.MouseEvent) => void;
     onToggle: () => void;
     onContextMenu: (e: React.MouseEvent) => void;
 }
 
-function TreeRow({ id, row, top, active, count, onClick, onToggle, onContextMenu }: TreeRowProps) {
-    const expandable = row.type === "schema" || row.type === "group" || (row.type === "object" && row.expandable);
+function TreeRow({ id, row, top, active, current, colorTag, count, onClick, onToggle, onContextMenu }: TreeRowProps) {
+    const expandable =
+        row.type === "connection" ||
+        row.type === "schema" ||
+        row.type === "group" ||
+        (row.type === "object" && row.expandable);
     const expanded = "expanded" in row ? row.expanded : undefined;
 
     let icon: ReactNode = null;
@@ -472,6 +562,19 @@ function TreeRow({ id, row, top, active, count, onClick, onToggle, onContextMenu
     let title: string | undefined;
 
     switch (row.type) {
+        case "connection": {
+            const tag = colorTagVar(colorTag);
+            icon = <EngineIcon engine={row.connection.engine} size={13} />;
+            label = row.connection.name;
+            right = (
+                <span className={styles.stats}>
+                    {current && <span className={styles.faint}>active</span>}
+                    {tag && <span className={styles.tag} style={{ background: tag }} aria-hidden />}
+                </span>
+            );
+            title = current ? `${row.connection.name}\nActive connection` : row.connection.name;
+            break;
+        }
         case "schema":
             icon = <Database size={13} />;
             label = row.schema;

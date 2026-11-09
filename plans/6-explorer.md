@@ -39,7 +39,7 @@ Users browse a connection's schema in the Explorer, find any table or column wit
 ## Design decisions
 
 - **Connected connections.** A connection counts as connected while it has a **background session**. This is one session per connection, in auto-commit mode, used only for SQL the app runs itself: loading the schema, structure views, DDL text and counts. Connecting from the Connections view, the Explorer or ⌘P opens it; today's standalone Connections-view session becomes this session. Disconnect closes every session of the connection. Tabs with an open transaction ask Commit / Roll back / Cancel first, as when closing a tab. Script and table tabs still open their own sessions (one per tab, as the spec requires), and opening one also connects the background session.
-- **Active connection.** This is the active tab's connection. With no tab open, or a tab with no connection, it is the most recently connected one. The Explorer shows the active connection by default and has a picker to show any other connected or cached connection. The status bar shows the active connection's name, access level and server version. When the Appearance setting is on, the top and status bars are tinted with its color tag (mockup: "Highlight production").
+- **Active connection.** This is the active tab's connection. With no tab open, or a tab with no connection, it is the most recently connected one. The Explorer lists every connected connection as a top-level node over its schema tree and marks the active one; a disconnected connection doesn't appear. The status bar shows the active connection's name, access level and server version. When the Appearance setting is on, the top and status bars are tinted with its color tag (mockup: "Highlight production").
 - **Schema cache.** The cache lives in the app database (new migration below). Each refresh replaces one connection's rows in a single transaction, so readers never see half a refresh. It holds what the Explorer, search and autocomplete need: objects with kind, parent table (for indexes and triggers), function signature, estimated rows and size, and table and view columns with type, nullability, default and primary key position. A connection with a large schema is loaded in a few bulk catalog queries, not one query per table.
   - **PostgreSQL:** reads `pg_namespace`, `pg_class`, `pg_attribute`, `pg_proc` and `pg_index` for the connected database. It skips `pg_catalog`, `information_schema`, `pg_toast` and temporary schemas. Estimated rows come from `reltuples`; −1 (never analyzed) shows no estimate. Size is `pg_total_relation_size`.
   - **SQLite:** runs `pragma database_list`, then reads `sqlite_schema` and `pragma_table_xinfo` for each database. The background session runs the connection's startup SQL, so databases attached there show up. Estimates come from `sqlite_stat1` when it exists. Sizes come from the `dbstat` virtual table, which we assume the bundled SQLite includes.
@@ -147,7 +147,7 @@ connections
    - Color tag tint of the top and status bars, with the Appearance setting.
 
 8. **Explorer panel**
-   - Connection picker, filter, Refresh; flattened, virtualized tree with roving focus and ARIA tree roles.
+   - Open connections as top-level nodes, filter, Refresh; flattened, virtualized tree with roving focus and ARIA tree roles.
    - Node kinds per engine; row counts and sizes; exact count on demand.
    - Context menu: open data, open structure, copy name, copy DDL, count rows. Single click opens a preview tab, double click pins it.
 

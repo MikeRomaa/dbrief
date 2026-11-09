@@ -27,6 +27,7 @@ import { MenuButton, type MenuEntry } from "@/components/ui/Menu";
 import { useConnectFlow } from "@/hooks/useConnectFlow";
 import type { ConnectionsState } from "@/hooks/useConnections";
 import { useSchema } from "@/hooks/useSchema";
+import { useSessionClosed } from "@/hooks/useSessionClosed";
 import { useStore } from "@/hooks/useStore";
 import { useTableEditing } from "@/hooks/useTableEditing";
 import { activeConnection } from "@/lib/connections/activeConnection";
@@ -263,12 +264,10 @@ export function TableTab({ table, active, connections, settings, onEdited, onRun
     }, [active, table.connectionId]);
 
     // A disconnect closes this tab's session too.
-    useEffect(() => {
-        if (session && !connections.sessions.some((s) => s.id === session.id)) {
-            liveSession.current = null;
-            setSession(null);
-        }
-    }, [connections.sessions, session]);
+    useSessionClosed(session, connections.sessions, () => {
+        liveSession.current = null;
+        setSession(null);
+    });
 
     const saveLayout = useMemo(
         () =>

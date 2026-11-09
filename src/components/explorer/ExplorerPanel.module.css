@@ -5,17 +5,21 @@
     min-height: 0;
 }
 
-.controls {
+.header {
     flex: none;
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 0 8px 6px;
+    gap: 2px;
+    height: 32px;
+    padding: 0 6px 0 12px;
 }
 
-.picker {
+.header h2 {
+    margin: 0;
+}
+
+.spacer {
     flex: 1;
-    min-width: 0;
 }
 
 .filter {
@@ -49,20 +53,6 @@
 
 .filterInput::placeholder {
     color: var(--color-text-faint);
-}
-
-.status {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 8px 6px 12px;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
-}
-
-.status span {
-    flex: 1;
 }
 
 .tree {
@@ -177,4 +167,33 @@
 
 .key {
     color: var(--color-warning);
+}
+
+.row[data-kind="connection"] {
+    font-weight: 600;
+}
+
+.row[data-kind="connection"] .stats {
+    align-items: center;
+    font-weight: 400;
+}
+
+.tag {
+    width: 8px;
+    height: 8px;
+    align-self: center;
+}
+
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 8px 12px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.empty p {
+    margin: 0;
 }

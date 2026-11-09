@@ -14,6 +14,7 @@ import { Select } from "@/components/ui/Select";
 import { useConnectFlow } from "@/hooks/useConnectFlow";
 import type { ConnectionsState } from "@/hooks/useConnections";
 import { useSchema } from "@/hooks/useSchema";
+import { useSessionClosed } from "@/hooks/useSessionClosed";
 import { activeConnection } from "@/lib/connections/activeConnection";
 import { ACCESS_LABELS, plural } from "@/lib/connections/connectionFormat";
 import { folderPath } from "@/lib/connections/connectionTree";
@@ -534,12 +535,10 @@ export function ScriptTab({ path, active, connections, settings, onEdited, onRun
     }, [connectionId, dialect, schema, schemaVersion, schemaObjects, loadError]);
 
     // A disconnect from the Connections view closes this tab's session too.
-    useEffect(() => {
-        if (session && !connections.sessions.some((s) => s.id === session.id)) {
-            setSession(null);
-            setTxOpen(false);
-        }
-    }, [connections.sessions, session]);
+    useSessionClosed(session, connections.sessions, () => {
+        setSession(null);
+        setTxOpen(false);
+    });
 
     // Report what closing this tab involves.
     const sessionId = session?.id ?? null;
