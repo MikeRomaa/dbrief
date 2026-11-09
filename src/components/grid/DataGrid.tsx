@@ -492,7 +492,7 @@ export function DataGrid({
     const capped = maxRows ? { maxHeight: HEADER_HEIGHT + Math.min(rowCount, maxRows) * ROW_HEIGHT + 14 } : undefined;
 
     return (
-        <>
+        <div className={styles.frame} data-capped={maxRows ? true : undefined}>
             {/* Virtualized: rows and cells are positioned divs, so <table> elements can't be used. The
                 grid takes focus and moves its active cell with aria-activedescendant. */}
             {/* biome-ignore lint/a11y/useSemanticElements: see above */}
@@ -745,6 +745,6 @@ export function DataGrid({
                     returnFocus={scrollRef.current}
                 />
             )}
-        </>
+        </div>
     );
 }

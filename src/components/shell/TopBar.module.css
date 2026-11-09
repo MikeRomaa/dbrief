@@ -16,7 +16,7 @@
 
 /* Room for the native traffic lights (titleBarStyle "Overlay"). */
 .topBar[data-platform="macos"] {
-    padding-left: 80px;
+    padding-left: 88px;
 }
 
 .app {
@@ -31,10 +31,10 @@
     image-rendering: pixelated;
 }
 
-/* Wordmark drawn as a mask so it takes the theme's text color. 2.5 screen px per font pixel. */
+/* Wordmark drawn as a mask so it takes the theme's text color. 2.25 screen px per font pixel. */
 .wordmark {
-    width: 57.5px;
-    height: 10px;
+    width: 51.75px;
+    height: 9px;
     background-color: var(--color-text);
     -webkit-mask: url("../../assets/wordmark.svg") 0 0 / 100% 100% no-repeat;
     mask: url("../../assets/wordmark.svg") 0 0 / 100% 100% no-repeat;

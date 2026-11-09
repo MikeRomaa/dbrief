@@ -1,6 +1,6 @@
 .shell {
     display: grid;
-    grid-template-rows: 36px minmax(0, 1fr) 24px;
+    grid-template-rows: 36px minmax(0, 1fr) 28px;
     height: 100vh;
     min-width: 0;
 }
