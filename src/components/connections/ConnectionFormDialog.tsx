@@ -23,17 +23,15 @@ import {
     typedCredentials,
     withAccessLevel,
 } from "@/lib/connections/connectionForm";
-import { ACCESS_DESCRIPTIONS, ACCESS_LABELS, COLOR_TAGS, ENGINE_NAMES } from "@/lib/connections/connectionFormat";
+import { ACCESS_DESCRIPTIONS, ACCESS_LABELS, COLOR_TAGS } from "@/lib/connections/connectionFormat";
 import type { Connection, ConnectionTree, TreeNode } from "@/lib/connections/connectionTree";
+import { engines } from "@/lib/engine";
 import { backend, type Credentials, errorMessage } from "@/lib/ipc/backend";
 import type { AccessLevel, Engine, SavedSecrets, SslMode } from "@/lib/ipc/bindings";
 import { tooltip } from "@/lib/shell/tooltip";
 
 import styles from "@/components/connections/ConnectionFormDialog.module.css";
 import controls from "@/components/ui/controls.module.css";
-
-/** Extensions offered when picking a SQLite file; same list as `SQLITE_EXTENSIONS` in dbrief-core. */
-const SQLITE_EXTENSIONS = ["db", "sqlite", "sqlite3", "db3", "s3db"];
 
 const ENGINES: { engine: Engine; detail: string }[] = [
     { engine: "postgres", detail: "Server, TCP" },
@@ -211,10 +209,10 @@ export function ConnectionFormDialog({
         setTimeout(() => setCopied(false), 1500);
     };
 
-    const pickFile = async (title: string, extensions?: string[]) => {
+    const pickFile = async (title: string, extensions?: readonly string[]) => {
         const path = await open({
             title,
-            filters: extensions ? [{ name: "SQLite database", extensions }] : undefined,
+            filters: extensions ? [{ name: "SQLite database", extensions: [...extensions] }] : undefined,
         });
         return typeof path === "string" ? path : null;
     };
@@ -258,7 +256,7 @@ export function ConnectionFormDialog({
                             >
                                 <EngineIcon engine={engine} size={18} />
                                 <span className={styles.engineText}>
-                                    <span className={styles.engineName}>{ENGINE_NAMES[engine]}</span>
+                                    <span className={styles.engineName}>{engines[engine].name}</span>
                                     <span className={styles.engineDetail}>{detail}</span>
                                 </span>
                             </button>
@@ -382,7 +380,10 @@ export function ConnectionFormDialog({
                                         value={form.filePath}
                                         onChange={(v) => set("filePath", v)}
                                         onBrowse={async () => {
-                                            const path = await pickFile("Choose SQLite file", SQLITE_EXTENSIONS);
+                                            const path = await pickFile(
+                                                "Choose SQLite file",
+                                                engines.sqlite.fileExtensions,
+                                            );
                                             if (path) set("filePath", path);
                                         }}
                                     />
@@ -550,7 +551,7 @@ export function ConnectionFormDialog({
                                         <Field label="Default schema" grow={1}>
                                             <TextInput
                                                 value={form.defaultSchema}
-                                                placeholder="public"
+                                                placeholder={engines.postgres.defaultSchema}
                                                 onChange={(v) => set("defaultSchema", v)}
                                             />
                                         </Field>

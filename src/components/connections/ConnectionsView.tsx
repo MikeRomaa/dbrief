@@ -41,13 +41,11 @@ import {
     visibleRows,
 } from "@/lib/connections/connectionTree";
 import { confirmDisconnect } from "@/lib/connections/disconnect";
+import { engines } from "@/lib/engine";
 import { backend, type Credentials } from "@/lib/ipc/backend";
 
 import styles from "@/components/connections/ConnectionsView.module.css";
 import controls from "@/components/ui/controls.module.css";
-
-/** Extensions offered when picking a SQLite file; same list as `SQLITE_EXTENSIONS` in dbrief-core. */
-const SQLITE_EXTENSIONS = ["db", "sqlite", "sqlite3", "db3", "s3db"];
 
 type DialogState =
     | { kind: "form"; connection: Connection | null; start: FormStart }
@@ -124,7 +122,7 @@ export function ConnectionsView({ state }: { state: ConnectionsState }) {
     const openSqliteFile = async () => {
         const path = await open({
             title: "Open SQLite file",
-            filters: [{ name: "SQLite database", extensions: SQLITE_EXTENSIONS }],
+            filters: [{ name: "SQLite database", extensions: [...engines.sqlite.fileExtensions] }],
         });
         if (typeof path !== "string") return;
 

@@ -1,3 +1,4 @@
+import { engines } from "@/lib/engine";
 import type { Engine, ObjectKind, SchemaColumn, SchemaObject } from "@/lib/ipc/bindings";
 
 /**
@@ -34,13 +35,14 @@ export const objectId = (o: Pick<SchemaObject, "schema" | "kind" | "name" | "det
     `o:${o.schema}:${o.kind}:${o.name}:${o.detail ?? ""}`;
 
 /** The SQLite database whose groups sit at the top level. */
-const SQLITE_MAIN = "main";
+const SQLITE_MAIN = engines.sqlite.defaultSchema;
+const POSTGRES_DEFAULT = engines.postgres.defaultSchema;
 
 /** Rows expanded when a connection's tree is first shown: its default schema and tables. */
 export function defaultExpanded(engine: Engine): Set<string> {
     return engine === "sqlite"
         ? new Set([groupId(SQLITE_MAIN, "table")])
-        : new Set([schemaId("public"), groupId("public", "table")]);
+        : new Set([schemaId(POSTGRES_DEFAULT), groupId(POSTGRES_DEFAULT, "table")]);
 }
 
 /**

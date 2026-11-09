@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 import postgresql from "@/assets/engines/postgresql.svg";
 import sqlite from "@/assets/engines/sqlite.svg";
-import { ENGINE_NAMES } from "@/lib/connections/connectionFormat";
+import { engines } from "@/lib/engine";
 import type { Engine } from "@/lib/ipc/bindings";
 
 const ICONS: Record<Engine, string> = { postgres: postgresql, sqlite };
@@ -27,7 +27,7 @@ export function EngineIcon({ engine, size = 14, labelled = false }: EngineIconPr
     };
 
     return labelled ? (
-        <span role="img" aria-label={ENGINE_NAMES[engine]} style={style} />
+        <span role="img" aria-label={engines[engine].name} style={style} />
     ) : (
         <span aria-hidden="true" style={style} />
     );

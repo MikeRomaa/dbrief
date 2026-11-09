@@ -1,10 +1,6 @@
 import type { Connection } from "@/lib/connections/connectionTree";
-import type { AccessLevel, Engine } from "@/lib/ipc/bindings";
-
-export const ENGINE_NAMES: Record<Engine, string> = {
-    postgres: "PostgreSQL",
-    sqlite: "SQLite",
-};
+import { engines } from "@/lib/engine";
+import type { AccessLevel } from "@/lib/ipc/bindings";
 
 export const ACCESS_LABELS: Record<AccessLevel, string> = {
     ro: "RO",
@@ -18,15 +14,12 @@ export const ACCESS_DESCRIPTIONS: Record<AccessLevel, string> = {
     ddl: "Data edits and schema changes allowed.",
 };
 
-/** Default port shown when a PostgreSQL connection doesn't set one. */
-const POSTGRES_PORT = 5432;
-
 /**
  * Engine and version. `short` keeps the major version for PostgreSQL ("PostgreSQL 17") and major.minor
  * for SQLite ("SQLite 3.46"); without a known version it is just the engine name.
  */
 export function engineLabel(connection: Pick<Connection, "engine" | "server_version">, short = false): string {
-    const name = ENGINE_NAMES[connection.engine];
+    const name = engines[connection.engine].name;
     const version = connection.server_version?.split(" ").pop();
     if (!version || !/^\d/.test(version)) {
         return name;
@@ -37,7 +30,7 @@ export function engineLabel(connection: Pick<Connection, "engine" | "server_vers
     }
 
     const parts = version.split(".");
-    const keep = connection.engine === "sqlite" ? 2 : 1;
+    const keep = engines[connection.engine].shortVersionParts;
     return `${name} ${parts.slice(0, keep).join(".")}`;
 }
 
@@ -68,7 +61,7 @@ export function locationLabel(
         return abbreviateHome(connection.file_path ?? "", home);
     }
 
-    return connection.host ? `${connection.host}:${connection.port ?? POSTGRES_PORT}` : "";
+    return connection.host ? `${connection.host}:${connection.port ?? engines[connection.engine].defaultPort}` : "";
 }
 
 const MINUTE = 60_000;

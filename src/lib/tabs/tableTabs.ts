@@ -1,3 +1,4 @@
+import { isDefaultSchema } from "@/lib/engine";
 import type { ObjectKind } from "@/lib/ipc/bindings";
 import { Store } from "@/lib/util/store";
 
@@ -39,9 +40,9 @@ export function parseTableKey(key: string): TableRef | null {
     }
 }
 
-/** `schema.name`, leaving out SQLite's "main" and PostgreSQL's "public". */
+/** `schema.name`, leaving out an engine's default schema ("main", "public"). */
 export function displayName(schema: string, name: string): string {
-    return schema === "main" || schema === "public" ? name : `${schema}.${name}`;
+    return isDefaultSchema(schema) ? name : `${schema}.${name}`;
 }
 
 /** Asks the table tab `key` to scroll to and select `column` (search results for a column). */

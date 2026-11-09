@@ -17,6 +17,7 @@ import { useSchema } from "@/hooks/useSchema";
 import { activeConnection } from "@/lib/connections/activeConnection";
 import { ACCESS_LABELS, plural } from "@/lib/connections/connectionFormat";
 import { folderPath } from "@/lib/connections/connectionTree";
+import { completionNamespace } from "@/lib/editor/sqlCompletion";
 import {
     allStatements,
     createSqlEditor,
@@ -30,6 +31,7 @@ import {
     showResult,
     statementsToRun,
 } from "@/lib/editor/sqlEditor";
+import { engines } from "@/lib/engine";
 import { backend, errorMessage, RunFailure, type Settings } from "@/lib/ipc/backend";
 import type { SessionInfo, TransactionMode, TransactionStatement } from "@/lib/ipc/bindings";
 import { completionTables } from "@/lib/schema/schemaStore";
@@ -386,7 +388,7 @@ export function ScriptTab({ path, active, connections, settings, onEdited, onRun
         const source = from === to ? view.state.doc.toString() : view.state.sliceDoc(from, to);
         try {
             const formatted = formatSql(source, {
-                language: dialect === "sqlite" ? "sqlite" : "postgresql",
+                language: engines[dialect].formatterLanguage,
                 tabWidth: 4,
             });
             replaceText(view, formatted, from !== to);
@@ -508,8 +510,10 @@ export function ScriptTab({ path, active, connections, settings, onEdited, onRun
         if (active && connectionId) activeConnection.set(connectionId);
     }, [active, connectionId]);
 
-    // Autocomplete schemas, tables and columns from the schema cache; reloaded when it changes.
-    const schemaVersion = useSchema(connectionId)?.version ?? 0;
+    // Autocomplete schemas, their objects and columns from the schema cache; reloaded when it changes.
+    const schemaState = useSchema(connectionId);
+    const schemaVersion = schemaState?.version ?? 0;
+    const schemaObjects = schemaState?.objects;
     // biome-ignore lint/correctness/useExhaustiveDependencies: a schema reload or the editor appearing (after loading) applies it again
     useEffect(() => {
         const view = viewRef.current;
@@ -520,19 +524,14 @@ export function ScriptTab({ path, active, connections, settings, onEdited, onRun
         let cancelled = false;
         void completionTables(connectionId).then((tables) => {
             if (cancelled || !viewRef.current) return;
-            const namespace: Record<string, Record<string, string[]>> = {};
-            for (const t of tables) {
-                const tablesOfSchema = namespace[t.schema] ?? {};
-                tablesOfSchema[t.table] = t.columns;
-                namespace[t.schema] = tablesOfSchema;
-            }
-            const defaultSchema = dialect === "sqlite" ? "main" : schema.trim() || "public";
+            const namespace = completionNamespace(schemaObjects ?? [], tables, dialect);
+            const defaultSchema = (dialect === "postgres" && schema.trim()) || engines[dialect].defaultSchema;
             setCompletionSchema(viewRef.current, { namespace, defaultSchema });
         });
         return () => {
             cancelled = true;
         };
-    }, [connectionId, dialect, schema, schemaVersion, loadError]);
+    }, [connectionId, dialect, schema, schemaVersion, schemaObjects, loadError]);
 
     // A disconnect from the Connections view closes this tab's session too.
     useEffect(() => {

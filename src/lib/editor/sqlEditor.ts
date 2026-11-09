@@ -1,6 +1,6 @@
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { PostgreSQL, SQLite, type SQLNamespace, sql } from "@codemirror/lang-sql";
+import { type SQLNamespace, sql } from "@codemirror/lang-sql";
 import { bracketMatching, HighlightStyle, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import {
@@ -21,11 +21,14 @@ import {
     highlightSpecialChars,
     keymap,
     lineNumbers,
+    tooltips,
     ViewPlugin,
     WidgetType,
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 
+import { columnsInScope, completionOptionClass, keywordCompletion, sqlDialect } from "@/lib/editor/sqlCompletion";
+import { TOOLTIP_GAP, VIEWPORT_MARGIN } from "@/lib/shell/tooltip";
 import { type Dialect, type Statement, splitStatements, statementAt, statementsIn } from "@/lib/sql/statements";
 
 /** What the host does for the editor's shortcuts and edits. */
@@ -194,11 +197,46 @@ const theme = EditorView.theme({
     ".cm-tooltip": {
         border: "1px solid var(--color-border)",
         backgroundColor: "var(--color-raised)",
-        boxShadow: "0 10px 28px rgb(0 0 0 / 0.2)",
-    },
-    ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
-        backgroundColor: "var(--color-hover)",
         color: "var(--color-text)",
+        boxShadow: "0 1px 2px rgb(0 0 0 / 0.08), 0 10px 28px rgb(0 0 0 / 0.2)",
+        animation: "cm-popup-in 100ms ease-out",
+    },
+    "@keyframes cm-popup-in": { from: { opacity: "0" } },
+    // The gap between the cursor's line and the popup; `popupLayer` leaves room for it.
+    ".cm-tooltip-autocomplete.cm-tooltip-below": { marginTop: `${TOOLTIP_GAP}px` },
+    ".cm-tooltip-autocomplete.cm-tooltip-above": { marginTop: `-${TOOLTIP_GAP}px` },
+    // Completions read like the code they insert: a compact list of names in the editor's font, the
+    // kind or signature muted beside each, keywords, types and built-in functions highlighted.
+    ".cm-tooltip.cm-tooltip-autocomplete > ul": {
+        minWidth: "220px",
+        maxWidth: "min(560px, 90vw)",
+        maxHeight: "296px",
+        padding: "4px",
+        boxSizing: "border-box",
+        fontFamily: "var(--font-mono)",
+        fontSize: "var(--font-size-md)",
+    },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul > li": {
+        padding: "0 8px",
+        lineHeight: "24px",
+    },
+    ".cm-tooltip-autocomplete > ul > li:hover": { backgroundColor: "var(--color-hover)" },
+    ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+        backgroundColor: "var(--color-changed-bg)",
+        color: "var(--color-text)",
+    },
+    ".cm-completionLabel": { fontWeight: "600" },
+    ".cm-completionMatchedText": { textDecoration: "none" },
+    ".cm-completion-keyword .cm-completionLabel, .cm-completion-type .cm-completionLabel, .cm-completion-builtin .cm-completionLabel":
+        { color: "var(--syntax-keyword)" },
+    ".cm-completionDetail": {
+        marginLeft: "1ch",
+        fontStyle: "normal",
+        color: "var(--color-text-muted)",
+    },
+    ".cm-completionListIncompleteTop:before, .cm-completionListIncompleteBottom:after": {
+        color: "var(--color-text-faint)",
+        lineHeight: "16px",
     },
     ".cm-result": {
         position: "sticky",
@@ -216,7 +254,33 @@ const theme = EditorView.theme({
 const language = new Compartment();
 const completion = new Compartment();
 
-/** Tables and columns autocomplete offers, from the schema cache: schema → table → columns. */
+function completions(): Extension {
+    return autocompletion({ icons: false, optionClass: completionOptionClass });
+}
+
+/**
+ * Popups (autocomplete) live on the body, so no panel clips them, and use the same bounds as the
+ * app's tooltips: below the cursor when that fits, otherwise above when there's more room there,
+ * shrinking to the space left and sliding sideways to stay inside the window.
+ */
+function popupLayer(): Extension {
+    return tooltips({
+        position: "fixed",
+        parent: document.body,
+        tooltipSpace: (view) => {
+            const { clientWidth, clientHeight } = view.dom.ownerDocument.documentElement;
+            const vertical = VIEWPORT_MARGIN + TOOLTIP_GAP;
+            return {
+                top: vertical,
+                left: VIEWPORT_MARGIN,
+                right: clientWidth - VIEWPORT_MARGIN,
+                bottom: clientHeight - vertical,
+            };
+        },
+    });
+}
+
+/** What autocomplete offers from the schema cache: schema → object → columns (see `completionNamespace`). */
 export interface CompletionSchema {
     namespace: SQLNamespace;
     defaultSchema?: string;
@@ -233,10 +297,17 @@ function languageFor({ dialect, schema }: LanguageConfig): Extension {
     return [
         dialectFacet.of(dialect),
         sql({
-            dialect: dialect === "sqlite" ? SQLite : PostgreSQL,
+            dialect: sqlDialect(dialect),
             schema: schema?.namespace,
             defaultSchema: schema?.defaultSchema,
+            upperCaseKeywords: true,
+            keywordCompletion: keywordCompletion(dialect),
         }),
+        schema
+            ? sqlDialect(dialect).language.data.of({
+                  autocomplete: columnsInScope(schema.namespace, schema.defaultSchema, dialect),
+              })
+            : [],
     ];
 }
 
@@ -305,7 +376,8 @@ export function createSqlEditor(
                 closeBrackets(),
                 highlightSelectionMatches(),
                 language.of(languageFor({ dialect })),
-                completion.of(autocomplete ? autocompletion() : []),
+                completion.of(autocomplete ? completions() : []),
+                popupLayer(),
                 syntaxHighlighting(highlight),
                 statementsField,
                 currentStatementField,
@@ -341,7 +413,7 @@ export function setCompletionSchema(view: EditorView, schema: CompletionSchema |
 }
 
 export function setAutocomplete(view: EditorView, on: boolean) {
-    view.dispatch({ effects: completion.reconfigure(on ? autocompletion() : []) });
+    view.dispatch({ effects: completion.reconfigure(on ? completions() : []) });
 }
 
 /** The statements Run should run: those the selection touches, or the one at the cursor. */
