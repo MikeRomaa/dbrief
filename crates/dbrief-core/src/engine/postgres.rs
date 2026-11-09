@@ -48,6 +48,8 @@ impl PostgresConnector {
             .host(input.host.as_deref().unwrap_or_default())
             .port(input.port.unwrap_or(5432))
             .application_name(APPLICATION_NAME)
+            // Named statements don't survive transaction-mode poolers; see `simple_scalar`.
+            .statement_cache_capacity(0)
             .ssl_mode(pg_ssl_mode(input.ssl_mode.unwrap_or(SslMode::Prefer)));
 
         if let Some(ca) = input
@@ -103,16 +105,24 @@ impl Connector for PostgresConnector {
                 PgConnection::connect_with(&through(&self.options, endpoint)?).await?
             }
         };
-        let pid: i32 = sqlx::query_scalar(
-            r#"
-            SELECT
-                pg_backend_pid()
-            "#,
-        )
-        .fetch_one(&mut conn)
-        .await?;
+        let pid = simple_scalar(&mut conn, "SELECT pg_backend_pid()")
+            .await?
+            .parse::<i32>()
+            .map_err(|e| sqlx::Error::Decode(e.into()))?;
         Ok(Box::new(PostgresConnection { conn, pid }))
     }
+}
+
+/// The first column of the first row, through the simple query protocol. Transaction-mode poolers
+/// (PgBouncer, Supabase, Neon) may hand each round trip to a different backend, so a statement
+/// prepared on one isn't there when it's executed: `prepared statement "sqlx_s_1" does not exist`.
+async fn simple_scalar(conn: &mut PgConnection, sql: &'static str) -> Result<String, sqlx::Error> {
+    let row = sqlx::raw_sql(sql)
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)?;
+    let value = row.try_get_raw(0)?;
+    Ok(value.as_str().map_err(sqlx::Error::Decode)?.to_owned())
 }
 
 /// Options that dial the tunnel instead of the server. Through a Unix socket the host name stays, so
@@ -159,14 +169,7 @@ struct PostgresConnection {
 #[async_trait]
 impl EngineConnection for PostgresConnection {
     async fn server_version(&mut self) -> Result<String, sqlx::Error> {
-        let version: String = sqlx::query_scalar(
-            r#"
-            SHOW
-                server_version
-            "#,
-        )
-        .fetch_one(&mut self.conn)
-        .await?;
+        let version = simple_scalar(&mut self.conn, "SHOW server_version").await?;
 
         // e.g. "17.2 (Debian 17.2-1.pgdg120+1)" → "PostgreSQL 17.2"
         Ok(format!(
