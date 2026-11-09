@@ -24,8 +24,14 @@ const APPLICATION_NAME: &str = "DBrief";
 ///
 /// SSL follows libpq's `sslmode`, defaulting to `prefer`. A CA certificate replaces the system roots
 /// for `verify-ca` and `verify-full`.
+///
+/// PgBouncer rejects the `options` startup parameter unless it's in `ignore_startup_parameters`, so
+/// the settings are then applied with `SET` after connecting. Behind a transaction-mode pooler they
+/// may not stick to every transaction; RO is still enforced client-side.
 pub struct PostgresConnector {
     options: PgConnectOptions,
+    without_settings: PgConnectOptions,
+    settings: Vec<(&'static str, String)>,
 }
 
 /// `PgConnectOptions` prints the password, so only the safe parts are shown.
@@ -85,11 +91,17 @@ impl PostgresConnector {
             server_settings.push(("search_path", quote_ident(schema.trim())));
         }
 
+        // `options()` only appends, so the copy without settings is taken first.
+        let without_settings = options.clone();
         if !server_settings.is_empty() {
-            options = options.options(server_settings);
+            options = options.options(server_settings.iter().map(|(k, v)| (*k, v.as_str())));
         }
 
-        Self { options }
+        Self {
+            options,
+            without_settings,
+            settings: server_settings,
+        }
     }
 }
 
@@ -99,11 +111,24 @@ impl Connector for PostgresConnector {
         &self,
         via: Option<&Endpoint>,
     ) -> Result<Box<dyn EngineConnection>, sqlx::Error> {
-        let mut conn = match via {
-            None => PgConnection::connect_with(&self.options).await?,
-            Some(endpoint) => {
-                PgConnection::connect_with(&through(&self.options, endpoint)?).await?
+        let dial = |options: &PgConnectOptions| match via {
+            None => Ok(options.clone()),
+            Some(endpoint) => through(options, endpoint),
+        };
+        let mut conn = match PgConnection::connect_with(&dial(&self.options)?).await {
+            Err(e) if !self.settings.is_empty() && rejects_options(&e) => {
+                let mut conn = PgConnection::connect_with(&dial(&self.without_settings)?).await?;
+                for (name, value) in &self.settings {
+                    sqlx::raw_sql(AssertSqlSafe(format!(
+                        "SET {name} = {}",
+                        quote_literal(value)
+                    )))
+                    .execute(&mut conn)
+                    .await?;
+                }
+                conn
             }
+            result => result?,
         };
         let pid = simple_scalar(&mut conn, "SELECT pg_backend_pid()")
             .await?
@@ -111,6 +136,18 @@ impl Connector for PostgresConnector {
             .map_err(|e| sqlx::Error::Decode(e.into()))?;
         Ok(Box::new(PostgresConnection { conn, pid }))
     }
+}
+
+/// PgBouncer's refusal of the `options` startup parameter.
+fn rejects_options(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .is_some_and(|e| e.message().contains("unsupported startup parameter"))
+}
+
+/// A PostgreSQL string literal.
+fn quote_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 /// The first column of the first row, through the simple query protocol. Transaction-mode poolers
@@ -473,7 +510,11 @@ mod tests {
         input.host = Some("db".into());
         input.default_schema = Some("app".into());
 
-        let options = PostgresConnector::new(&input, Some("pw")).options;
+        let connector = PostgresConnector::new(&input, Some("pw"));
+        assert_eq!(connector.without_settings.get_options(), None);
+        assert_eq!(connector.settings.len(), 2);
+        assert_eq!(quote_literal("it's"), "'it''s'");
+        let options = connector.options;
         assert_eq!(options.get_host(), "db");
         assert_eq!(options.get_port(), 5432);
         let settings = options.get_options().unwrap_or_default();
